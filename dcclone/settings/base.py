@@ -23,7 +23,15 @@ INSTALLED_APPS = [
     'corsheaders',
     'core',
     'users',
+    'django_extensions',
 ]
+
+
+# settings.py
+GRAPH_MODELS = {
+  'all_applications': True,
+  'group_models': True,
+}
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
