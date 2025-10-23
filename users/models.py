@@ -1,11 +1,13 @@
-from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, AbstractUser
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, AbstractUser,UserManager
+from django.contrib.auth.validators import UnicodeUsernameValidator
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 # from django.contrib.postgres.fields import ArrayField
 
 
-class User(AbstractUser, PermissionsMixin):
+class User(AbstractBaseUser, PermissionsMixin):
     username_validator = UnicodeUsernameValidator()
 
     username = models.CharField(
@@ -36,7 +38,7 @@ class User(AbstractUser, PermissionsMixin):
             "Unselect this instead of deleting accounts."
         ),
     )
-    date_joined = models.DateTimeField(_("date joined"), default=timezone.now)
+    date_joined = models.DateTimeField(_("date joined"), auto_now_add=True)
 
     objects = UserManager()
 
@@ -54,19 +56,15 @@ class User(AbstractUser, PermissionsMixin):
         self.email = self.__class__.objects.normalize_email(self.email)
 
     def get_full_name(self):
-        """
-        Return the first_name plus the last_name, with a space in between.
-        """
-        full_name = "%s %s" % (self.first_name, self.last_name)
-        return full_name.strip()
+        return self.username
 
     def get_short_name(self):
-        """Return the short name for the user."""
-        return self.first_name
+        return self.username
 
     def email_user(self, subject, message, from_email=None, **kwargs):
-        """Send an email to this user."""
-        send_mail(subject, message, from_email, [self.email], **kwargs)
+        pass
+        # """Send an email to this user."""
+        # send_mail(subject, message, from_email, [self.email], **kwargs)
 
 
 class UserAgreement(models.Model):
