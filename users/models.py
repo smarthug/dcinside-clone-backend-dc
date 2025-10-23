@@ -1,4 +1,4 @@
-from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, AbstractUser
 from django.db import models
 # from django.contrib.postgres.fields import ArrayField
 
@@ -7,6 +7,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     username = models.CharField(max_length=150)
     display_name = models.CharField(max_length=50, blank=True, null=True)
+    level = models.PositiveSmallIntegerField(default=99)
 
     def __str__(self):
         return f"{self.username}"
@@ -36,7 +37,6 @@ class UserMetaInfo(models.Model):
         LAW = 8, '법률'
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    last_login_at = models.DateTimeField(auto_now_add=True)
 
     korean_name = models.CharField(max_length=50, blank=True, null=True)
     english_name = models.CharField(max_length=100, blank=True, null=True)
