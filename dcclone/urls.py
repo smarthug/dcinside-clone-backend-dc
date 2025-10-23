@@ -15,6 +15,7 @@ router.register(r'comments', CommentViewSet, basename='comment')
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
+    path('api/users/', include('users.urls')),
     path('api/auth/jwt/create/', TokenObtainPairView.as_view(), name='jwt-create'),
     path('api/auth/jwt/refresh/', TokenRefreshView.as_view(), name='jwt-refresh'),
     path('api/hot/', hot_feed, name='hot-feed'),
