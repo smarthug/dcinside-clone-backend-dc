@@ -1,4 +1,4 @@
-from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, AbstractUser,UserManager
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, UserManager
 from django.contrib.auth.validators import UnicodeUsernameValidator
 
 from django.db import models
@@ -28,7 +28,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(
         _("staff status"),
         default=False,
-        help_text=_("Designates whether the user can log into this admin site."),
+        help_text=_(
+            "Designates whether the user can log into this admin site."),
+    )
+    is_superuser = models.BooleanField(
+        _("superuser"),
+        default=False,
     )
     is_active = models.BooleanField(
         _("active"),
@@ -49,7 +54,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Meta:
         verbose_name = _("user")
         verbose_name_plural = _("users")
-        abstract = True
 
     def clean(self):
         super().clean()
