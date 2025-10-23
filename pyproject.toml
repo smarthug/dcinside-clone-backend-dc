@@ -1,0 +1,18 @@
+
+[project]
+name = "dcinside-clone-backend-dc"
+version = "0.1.0"
+description = "DCInside-like backend (Gallery -> Post -> Comment) with Django + DRF + PostgreSQL"
+requires-python = ">=3.11"
+readme = "README.md"
+
+dependencies = [
+    "Django>=5.0,<6.0",
+    "djangorestframework>=3.15",
+    "djangorestframework-simplejwt>=5.3",
+    "psycopg[binary]>=3.2",
+    "python-dotenv>=1.0",
+    "django-cors-headers>=4.4",
+    "Pillow>=10.4",
+    "dj-database-url>=2.2",
+]
