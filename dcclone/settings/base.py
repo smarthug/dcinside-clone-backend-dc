@@ -22,7 +22,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'core',
-    'users'
+    'users',
+    'ads'
 ]
 
 
