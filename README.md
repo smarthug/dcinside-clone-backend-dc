@@ -27,6 +27,7 @@ python -m pip install --upgrade uv
 # 가상환경 생성 (.venv 폴더)
 uv venv
 
+source .venv/bin/activate
 # 가상환경 활성화 (PowerShell)
 . .\.venv\Scripts\Activate.ps1
 ```
