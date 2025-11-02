@@ -5,7 +5,7 @@ from django.utils import timezone
 
 
 from .models import User, UserMetaInfo, UserVerification
-from .serializers import UserMetaProfileSerializer, UserProfileSerializer, UserRegistrationSerializer
+from .serializers import UserProfileSerializer, UserRegistrationSerializer
 
 
 class UserRegistrationView(generics.CreateAPIView):
@@ -23,18 +23,18 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
-    def put(self, request, *args, **kwargs):
-        return response.Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+    # def put(self, request, *args, **kwargs):
+    #     return response.Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
-    def patch(self, request, *args, **kwargs):
-        if request.data.get("meta", False):
-            instance = UserMetaInfo.objects.get(user=request.user)
-            serializer = UserMetaProfileSerializer(
-                instance, data=request.data.get("UserMetaInfo"), partial=True)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
+    # def patch(self, request, *args, **kwargs):
+    #     if request.data.get("meta", False):
+    #         instance = UserMetaInfo.objects.get(user=request.user)
+    #         serializer = UserMetaProfileSerializer(
+    #             instance, data=request.data.get("UserMetaInfo"), partial=True)
+    #         serializer.is_valid(raise_exception=True)
+    #         serializer.save()
 
-        return super().patch(request, *args, **kwargs)
+    #     return super().patch(request, *args, **kwargs)
 
 
 class UserVerifyView(generics.CreateAPIView):
@@ -52,7 +52,7 @@ class UserVerifyView(generics.CreateAPIView):
             user_verification.user.save()
             user_verification.delete()
             return response.Response({"message": "User verified successfully"}, status=status.HTTP_200_OK)
-        
+
         except User.DoesNotExist:
             return response.Response({"message": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
 
