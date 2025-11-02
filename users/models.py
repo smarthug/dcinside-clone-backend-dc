@@ -1,3 +1,4 @@
+from uuid import uuid4
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, UserManager
 from django.contrib.auth.validators import UnicodeUsernameValidator
 
@@ -69,6 +70,13 @@ class User(AbstractBaseUser, PermissionsMixin):
         pass
         # """Send an email to this user."""
         # send_mail(subject, message, from_email, [self.email], **kwargs)
+
+
+class UserVerification(models.Model):
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name='verification', unique=True)
+    token = models.UUIDField(default=uuid4,unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class UserAgreement(models.Model):

@@ -10,7 +10,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', '7c35lx3HZW7Qsah2qaZx13eyXp85Fzhx')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if h.strip()]
+ALLOWED_HOSTS = [h.strip() for h in os.getenv(
+    'ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if h.strip()]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -29,8 +30,8 @@ INSTALLED_APPS = [
 
 # settings.py
 GRAPH_MODELS = {
-  'all_applications': True,
-  'group_models': True,
+    'all_applications': True,
+    'group_models': True,
 }
 
 MIDDLEWARE = [
@@ -64,7 +65,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dcclone.wsgi.application'
 
-DATABASES = {'default': dj_database_url.parse(os.getenv('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/dcclone'), conn_max_age=600)}
+DATABASES = {'default': dj_database_url.parse(os.getenv(
+    'DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/dcclone'), conn_max_age=600)}
 
 AUTH_USER_MODEL = 'users.User'
 LANGUAGE_CODE = 'ko-kr'
@@ -89,5 +91,16 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
 
-CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()]
+CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv(
+    'CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'rokkica0472@gmail.com'
+EMAIL_HOST_PASSWORD = os.getenv('GOOGLE_APP_PASS', '')  # 단, 공백을 제외한 16글자.
+
+FRONT_BASE_URL = "localhost:3000"

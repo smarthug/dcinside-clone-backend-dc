@@ -1,14 +1,20 @@
-from rest_framework import serializers
+from django.core.mail import send_mail
+from django.conf import settings
 
-from .models import User, UserMetaInfo, UserAgreement
+from rest_framework import serializers
+from django.utils.translation import gettext_lazy as _
+
+
+from .models import User, UserMetaInfo, UserAgreement, UserVerification
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8, style={'input_type': 'password'})
-    # Accept minimal extra fields for meta/agreement; optional
-    korean_name = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
-    email_opt_in = serializers.BooleanField(write_only=True, required=False)
-    message_opt_in = serializers.BooleanField(write_only=True, required=False)
+    password = serializers.CharField(write_only=True, min_length=8)
+    passwordConfirm = serializers.CharField(write_only=True, min_length=8)
+    email_opt_in = serializers.BooleanField(
+        write_only=True, required=False, default=False)
+    message_opt_in = serializers.BooleanField(
+        write_only=True, required=False, default=False)
 
     class Meta:
         model = User
@@ -16,10 +22,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'id',
             'username',
             'password',
+            "passwordConfirm",
             'email',
-            'display_name',
-            # extra accepted, mapped manually
-            'korean_name',
             'email_opt_in',
             'message_opt_in',
         ]
@@ -30,26 +34,43 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password')
-        korean_name = validated_data.pop('korean_name', None)
-        email_opt_in = validated_data.pop('email_opt_in', None)
-        message_opt_in = validated_data.pop('message_opt_in', None)
+        password_confirm = validated_data.pop('passwordConfirm')
+        email_opt_in = validated_data.pop('email_opt_in')
+        message_opt_in = validated_data.pop('message_opt_in')
 
-        user = User(**validated_data)
+        display_name = validated_data.get('username')
+        email = validated_data.get('email')
+
+        if password != password_confirm:
+            raise serializers.ValidationError(
+                {'password': _('Passwords must match.')})
+
+        user = User(**validated_data,
+                    display_name=display_name, is_active=False)
         user.set_password(password)
         user.save()
 
-        # create or update related meta info
-        if korean_name:
-            UserMetaInfo.objects.update_or_create(user=user, defaults={'korean_name': korean_name})
-        # agreements (optional)
-        if email_opt_in is not None or message_opt_in is not None:
-            UserAgreement.objects.update_or_create(
-                user=user,
-                defaults={
-                    'email_agreement': bool(email_opt_in) if email_opt_in is not None else False,
-                    'message_agreement': bool(message_opt_in) if message_opt_in is not None else False,
-                }
-            )
+        # agreements
+        UserAgreement.objects.update_or_create(
+            user=user,
+            defaults={
+                'email_agreement': bool(email_opt_in),
+                'message_agreement': bool(message_opt_in),
+            }
+        )
+        # Verifiation
+        [verification_obj, created] = UserVerification.objects.update_or_create(
+            user=user,
+        )
+
+        send_mail('[한국건설감정사회] 회원가입 이메일인증 입니다.',
+                  #   '<div style="width: fit-content; min-width:100%;">',
+                  'rokkor0472@gmail.com',
+                  '',
+                  [email],
+                  fail_silently=False,
+                  html_message=f'<a href="http://{settings.FRONT_BASE_URL}/verify/?token={str(verification_obj.token).replace("-", "")}">인증하기</a>',
+                  )
         return user
 
 
@@ -65,3 +86,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'last_login',
         ]
         read_only_fields = fields
+
+
+class UserMetaProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserMetaInfo
+        fields = "__all__"
+        read_only_fields = ['user']
