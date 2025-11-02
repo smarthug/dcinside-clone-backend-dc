@@ -4,7 +4,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from django.utils import timezone
 
 
-from .models import User, UserMetaInfo, UserVerification
+from .models import User,  UserVerification
 from .serializers import UserProfileSerializer, UserRegistrationSerializer
 
 
