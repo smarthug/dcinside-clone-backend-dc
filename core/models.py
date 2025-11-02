@@ -35,6 +35,8 @@ class Post(TimestampedModel):
     image = models.ImageField(upload_to='posts/', blank=True, null=True)
     recommend = models.IntegerField(default=0)
     views = models.PositiveIntegerField(default=0)
+    is_delete = models.BooleanField(default=False)
+    is_pending = models.BooleanField(default=False)
 
     def __str__(self):
         return f"[{self.gallery.slug}] {self.title}"
