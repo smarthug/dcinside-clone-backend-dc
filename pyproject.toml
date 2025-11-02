@@ -15,4 +15,7 @@ dependencies = [
     "django-cors-headers>=4.4",
     "Pillow>=10.4",
     "dj-database-url>=2.2",
+    "pylint-django>=2.6.1",
+    "blake3>=1.0.8",
+    "django-extensions>=4.1",
 ]
