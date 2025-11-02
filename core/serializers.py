@@ -2,17 +2,23 @@
 from rest_framework import serializers
 from .models import Gallery, Post, Comment
 
+
 class GallerySerializer(serializers.ModelSerializer):
     class Meta:
         model = Gallery
-        fields = ['id', 'slug', 'title', 'description', 'is_anonymous', 'allow_images', 'created_at', 'updated_at']
+        fields = ['id', 'slug', 'title', 'description',
+                  'is_anonymous', 'allow_images', 'created_at', 'updated_at']
+
 
 class PostSerializer(serializers.ModelSerializer):
-    gallery = serializers.SlugRelatedField(slug_field='slug', queryset=Gallery.objects.all())
+    gallery = serializers.SlugRelatedField(
+        slug_field='slug', queryset=Gallery.objects.all())
     author_username = serializers.SerializerMethodField()
+
     class Meta:
         model = Post
-        fields = ['id', 'gallery', 'title', 'content', 'author', 'author_username', 'nickname', 'image', 'recommend', 'views', 'created_at', 'updated_at']
+        fields = ['id', 'gallery', 'title', 'content', 'author', 'author_username',
+                  'nickname', 'image', 'recommend', 'views', 'created_at', 'updated_at', 'is_notice'],
         read_only_fields = ['author', 'recommend', 'views']
 
     def get_author_username(self, obj):
@@ -24,11 +30,14 @@ class PostSerializer(serializers.ModelSerializer):
             validated_data['author'] = request.user
         return super().create(validated_data)
 
+
 class CommentSerializer(serializers.ModelSerializer):
     author_username = serializers.SerializerMethodField()
+
     class Meta:
         model = Comment
-        fields = ['id', 'post', 'author', 'author_username', 'nickname', 'content', 'parent', 'recommend', 'created_at', 'updated_at']
+        fields = ['id', 'post', 'author', 'author_username', 'nickname',
+                  'content', 'parent', 'recommend', 'created_at', 'updated_at']
         read_only_fields = ['author', 'recommend']
 
     def get_author_username(self, obj):
