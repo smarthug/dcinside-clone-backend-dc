@@ -1,6 +1,16 @@
 from django.db import models
 from django.utils import timezone
 
+from ads.utils.fs import get_filename, mfs
+
+
+def upload_to_image_large(instance, filename):
+    return "media/ads/{0}".format(get_filename(instance.image_large, filename))
+
+
+def upload_to_image_small(instance, filename):
+    return "media/ads/{0}".format(get_filename(instance.image_small, filename))
+
 
 class AdManager(models.Manager):
     """
@@ -32,11 +42,13 @@ class Ad(models.Model):
         help_text="Internal title for the ad."
     )
     image_large = models.ImageField(
-        upload_to='ads/%Y/%m/%d/',
+        upload_to=upload_to_image_large,
+        storage=mfs,
         help_text="The ad image file."
     )
     image_small = models.ImageField(
-        upload_to='ads/%Y/%m/%d/',
+        upload_to=upload_to_image_large,
+        storage=mfs,
         help_text="The ad image file."
     )
     link_url = models.URLField(
