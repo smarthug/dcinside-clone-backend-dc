@@ -42,9 +42,11 @@ class UserVerifyView(generics.CreateAPIView):
 
     def post(self, request, *args, **kwargs):
         token = kwargs.get('token')
+        if not token:
+            token = request.query_params.get('token')
+        print("Received token:", token)
         try:
-            user_verification = UserVerification.objects.get(
-                verification__token=token)
+            user_verification = UserVerification.objects.get(token=token)
             if (user_verification.created_at + timezone.timedelta(minutes=24)) > timezone.now():
                 return response.Response({"message": "Token expired"}, status=status.HTTP_400_BAD_REQUEST)
 
