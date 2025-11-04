@@ -42,6 +42,9 @@ class UserVerifyView(generics.CreateAPIView):
 
     def post(self, request, *args, **kwargs):
         token = kwargs.get('token')
+        if not token:
+            token = request.query_params.get('token')
+        print("Received token:", token)
         try:
             user_verification = UserVerification.objects.get(token=token)
             if (user_verification.created_at + timezone.timedelta(minutes=24)) > timezone.now():
