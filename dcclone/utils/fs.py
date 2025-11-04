@@ -1,4 +1,7 @@
+from pathlib import PurePath
 from blake3 import blake3
+from django.core.files.storage import FileSystemStorage
+from django.forms import ValidationError
 
 
 class MediaFileSystemStorage(FileSystemStorage):
@@ -17,14 +20,23 @@ class MediaFileSystemStorage(FileSystemStorage):
 
 def compute_hash(content, chunk_size=None) -> str:
     content.seek(0)
-    return blake3(content).digest()
+    return blake3(content).hexdigest()
+
+
+def getFilename(content, filename):
+    file_ext = PurePath(filename).suffix
+    file_root = compute_hash(content=content)
+    # file_ext includes the dot.
+    if file_root is None:
+        raise ValidationError("")
+    return PurePath("{0}/{1}".format(file_root[:2], file_root[2:])).with_suffix(file_ext)
 
 
 def getFilenameWithHash(hash):
     # file_ext includes the dot.
     if hash is None:
-        raise ValidationError()
-    return PurePath("{0}/{1}".format(hash[:2], hash))
+        raise ValidationError("")
+    return PurePath("{0}/{1}".format(hash[:2], hash[2:]))
 
 
 mfs = MediaFileSystemStorage()
