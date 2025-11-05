@@ -1,4 +1,5 @@
 
+from os import read
 from rest_framework import serializers
 from .models import Gallery, Post, Comment
 
@@ -6,8 +7,8 @@ from .models import Gallery, Post, Comment
 class GallerySerializer(serializers.ModelSerializer):
     class Meta:
         model = Gallery
-        fields = ['id', 'slug', 'title', 'description',
-                  'is_anonymous', 'allow_images', 'created_at', 'updated_at']
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
 
 
 class PostSerializer(serializers.ModelSerializer):
@@ -18,7 +19,7 @@ class PostSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
         fields = ['id', 'gallery', 'title', 'content', 'author', 'author_username',
-                  'nickname', 'image', 'recommend', 'views', 'created_at', 'updated_at', 'is_notice'],
+                  'nickname', 'image', 'recommend', 'views', 'created_at', 'updated_at', 'is_notice']
         read_only_fields = ['author', 'recommend', 'views']
 
     def get_author_username(self, obj):
