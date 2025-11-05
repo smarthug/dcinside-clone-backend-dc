@@ -17,8 +17,12 @@ class Gallery(TimestampedModel):
     slug = models.SlugField(unique=True, max_length=64)
     title = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
-    is_anonymous = models.BooleanField(default=True)
+    is_anonymous = models.BooleanField(default=False)
     allow_images = models.BooleanField(default=True)
+    permission_read = models.PositiveSmallIntegerField(default=99)
+    permission_write = models.PositiveSmallIntegerField(default=1)
+    permission_per_post = models.BooleanField(default=False)
+    allow_comments = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.title} ({self.slug})"
