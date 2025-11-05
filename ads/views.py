@@ -1,4 +1,5 @@
 from rest_framework import generics, viewsets, permissions
+from django.utils import timezone
 from .models import Ad
 from .serializers import PublicAdSerializer, AdAdminSerializer
 
@@ -22,10 +23,10 @@ class PublishedAdListView(generics.ListAPIView):
         """
         # Get location from query param, default to 'hero'
         location = self.request.query_params.get('location', 'hero')
-
+        date_now = timezone.now()
         # Use the 'published' manager and filter by location
         # The default ordering from the model's Meta class will be applied.
-        return Ad.published.filter(location=location)
+        return Ad.published.filter(location=location, start_date__lte=date_now, end_date__gte=date_now)
 
 
 class AdAdminViewSet(viewsets.ModelViewSet):
