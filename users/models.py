@@ -25,7 +25,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     display_name = models.CharField(max_length=50, blank=True, null=True)
     level = models.PositiveSmallIntegerField(default=99)
-    email = models.EmailField(_("email address"), blank=True)
+    email = models.EmailField(
+        _("email address"), blank=False, null=False, unique=True)
     is_staff = models.BooleanField(
         _("staff status"),
         default=False,
@@ -75,7 +76,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 class UserVerification(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='verification', unique=True)
-    token = models.UUIDField(default=uuid4,unique=True)
+    token = models.UUIDField(default=uuid4, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 
