@@ -5,11 +5,11 @@ from ads.utils.fs import get_filename, mfs
 
 
 def upload_to_image_large(instance, filename):
-    return "media/ads/{0}".format(get_filename(instance.image_large, filename))
+    return "media/ads/{0}".format(get_filename(instance.image_large.read(), filename))
 
 
 def upload_to_image_small(instance, filename):
-    return "media/ads/{0}".format(get_filename(instance.image_small, filename))
+    return "media/ads/{0}".format(get_filename(instance.image_small.read(), filename))
 
 
 class AdManager(models.Manager):
@@ -47,12 +47,12 @@ class Ad(models.Model):
         help_text="The ad image file."
     )
     image_small = models.ImageField(
-        upload_to=upload_to_image_large,
+        upload_to=upload_to_image_small,
         storage=mfs,
         help_text="The ad image file."
     )
-    link_url = models.URLField(
-        max_length=2048,
+    link_url = models.TextField(
+        max_length=4096,
         blank=True,
         null=True,
         help_text="URL the ad links to when clicked."

@@ -10,7 +10,7 @@ class PublicAdSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ad
         fields = ('id', 'title', 'image_large',
-                  'image_small', 'link_url', 'location')
+                  'image_small', 'link_url', 'location', 'order')
         read_only_fields = fields
 
 

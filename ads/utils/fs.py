@@ -19,7 +19,6 @@ class MediaFileSystemStorage(FileSystemStorage):
 
 
 def compute_hash(content, chunk_size=None) -> str:
-    content.seek(0)
     return blake3(content).hexdigest()
 
 

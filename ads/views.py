@@ -1,5 +1,6 @@
 from rest_framework import generics, viewsets, permissions
 from django.utils import timezone
+from shared.permissions import IsLevel1User
 from .models import Ad
 from .serializers import PublicAdSerializer, AdAdminSerializer
 
@@ -26,7 +27,7 @@ class PublishedAdListView(generics.ListAPIView):
         date_now = timezone.now()
         # Use the 'published' manager and filter by location
         # The default ordering from the model's Meta class will be applied.
-        return Ad.published.filter(location=location, start_date__lte=date_now, end_date__gte=date_now)
+        return Ad.published.filter(location=location, start_date__lte=date_now, end_date__gte=date_now, is_active=True).order_by('order', 'start_date')
 
 
 class AdAdminViewSet(viewsets.ModelViewSet):
@@ -39,7 +40,9 @@ class AdAdminViewSet(viewsets.ModelViewSet):
     including inactive or scheduled ones.
     """
     serializer_class = AdAdminSerializer
-    permission_classes = [permissions.IsAdminUser]  # Or your custom permission
+    permission_classes = [permissions.IsAuthenticated,
+                          IsLevel1User]  # Or your custom permission
+    filterset_fields = ['location']
 
     # Admin sees all objects, not just published ones
     queryset = Ad.objects.all().order_by('location', 'order')
