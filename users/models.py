@@ -103,7 +103,8 @@ class UserMetaInfo(models.Model):
         CULTURAL_HERITAGE = 7, '문화재'
         LAW = 8, '법률'
 
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name='meta_info')
 
     korean_name = models.CharField(max_length=50, blank=True, null=True)
     english_name = models.CharField(max_length=100, blank=True, null=True)

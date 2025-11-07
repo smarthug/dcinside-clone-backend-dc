@@ -2,8 +2,28 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.utils.translation import gettext_lazy as _
+from .models import User, UserAgreement, UserMetaInfo
 
-from .models import User
+
+class UserAgreementInline(admin.StackedInline):
+    model = UserAgreement
+    can_delete = False
+    verbose_name_plural = 'User Agreements'
+    readonly_fields = ('email_agreement_at', 'message_agreement_at',)
+
+
+class UserMetaInfoInline(admin.StackedInline):
+    model = UserMetaInfo
+    can_delete = False
+    verbose_name_plural = 'User Meta Info'
+    fieldsets = (
+        ('Personal Info', {'fields': ('korean_name',
+         'english_name', 'birth_date', 'photo',)}),
+        ('Contact & Address', {'fields': (
+            'postal_code', 'address', 'phone_primary', 'phone_secondary', 'homepage_url',)}),
+        ('Expert Info', {'fields': ('appraiser_class', 'specialty_primary', 'specialty_secondary',
+         'specialty_tertiary', 'company_info', 'education', 'experience', 'certificate1', 'certificate2',)}),
+    )
 
 
 @admin.register(User)
@@ -29,12 +49,12 @@ class UserAdmin(DjangoUserAdmin):
         'level',
     )
     readonly_fields = ('date_joined',)
+    inlines = (UserAgreementInline, UserMetaInfoInline,)
 
     fieldsets = (
         (None, {"fields": ("username", "password",)}),
-        (_("Personal info"), {"fields": ("email",)}),
-        (
-            _("Permissions"),
+        (_("Personal info"), {"fields": ("display_name", "email", "level",)}),
+        (_("Permissions"),
             {
                 "fields": (
                     "is_active",
@@ -43,90 +63,7 @@ class UserAdmin(DjangoUserAdmin):
                     "groups",
                     "user_permissions",
                 ),
-            },
+        },
         ),
         (_("Important dates"), {"fields": ("last_login", "date_joined",)}),
     )
-
-    # fieldsets = DjangoUserAdmin.fieldsets + (
-    #     (
-    #         '개인 정보',
-    #         {
-    #             'fields': (
-    #                 'display_name',
-    #                 'korean_name',
-    #                 'english_name',
-    #                 'birth_date',
-    #                 'gender',
-    #                 'icon',
-    #                 'photo',
-    #                 'resident_registration_number',
-    #             )
-    #         },
-    #     ),
-    #     (
-    #         '연락처 및 주소',
-    #         {
-    #             'fields': (
-    #                 'postal_code',
-    #                 'address',
-    #                 'phone_primary',
-    #                 'phone_secondary',
-    #                 'homepage_url',
-    #             )
-    #         },
-    #     ),
-    #     (
-    #         '회원 설정',
-    #         {
-    #             'fields': (
-    #                 'level',
-    #                 'points',
-    #                 'login_count',
-    #                 'email_opt_in',
-    #                 'message_opt_in',
-    #                 'referrer',
-    #                 'admin_note',
-    #             )
-    #         },
-    #     ),
-    #     (
-    #         '전문가 정보',
-    #         {
-    #             'fields': (
-    #                 'appraiser_class',
-    #                 'specialty_primary',
-    #                 'specialty_secondary',
-    #                 'specialty_tertiary',
-    #                 'company_info',
-    #                 'education',
-    #                 'experience',
-    #                 'certificate1',
-    #                 'certificate2',
-    #             )
-    #         },
-    #     ),
-    # )
-
-    # add_fieldsets = DjangoUserAdmin.add_fieldsets + (
-    #     (
-    #         '추가 정보',
-    #         {
-    #             'classes': ('wide',),
-    #             'fields': (
-    #                 'display_name',
-    #                 'korean_name',
-    #                 'english_name',
-    #                 'birth_date',
-    #                 'gender',
-    #                 'postal_code',
-    #                 'address',
-    #                 'phone_primary',
-    #                 'phone_secondary',
-    #                 'email_opt_in',
-    #                 'message_opt_in',
-    #                 'referrer',
-    #             ),
-    #         },
-    #     ),
-    # )
