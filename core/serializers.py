@@ -32,6 +32,18 @@ class PostSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
+class PostListSerializer(serializers.ModelSerializer):
+    author_username = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Post
+        fields = ['id', 'title', 'author_username',
+                  'nickname', 'created_at', 'updated_at', 'is_notice', 'external_link']
+
+    def get_author_username(self, obj):
+        return obj.author.username if obj.author else None
+
+
 class CommentSerializer(serializers.ModelSerializer):
     author_username = serializers.SerializerMethodField()
 

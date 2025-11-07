@@ -37,6 +37,7 @@ class Post(TimestampedModel):
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name='posts')
     nickname = models.CharField(max_length=30, blank=True, null=True)
     image = models.ImageField(upload_to='posts/', blank=True, null=True)
+    external_link = models.URLField(blank=True, null=True)
     recommend = models.IntegerField(default=0)
     views = models.PositiveIntegerField(default=0)
     is_delete = models.BooleanField(default=False)
