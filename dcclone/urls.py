@@ -16,10 +16,12 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     path('api/users/', include('users.urls')),
+    path('api/ads/', include('ads.urls')),
     path('api/auth/jwt/create/', TokenObtainPairView.as_view(), name='jwt-create'),
     path('api/auth/jwt/refresh/', TokenRefreshView.as_view(), name='jwt-refresh'),
     path('api/hot/', hot_feed, name='hot-feed'),
 ]
 
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.MEDIA_URL,
+                          document_root=settings.MEDIA_ROOT)
