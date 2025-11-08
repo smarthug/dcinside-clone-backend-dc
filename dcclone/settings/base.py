@@ -104,4 +104,8 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'rokkica0472@gmail.com'
 EMAIL_HOST_PASSWORD = os.getenv('GOOGLE_APP_PASS', '')  # 단, 공백을 제외한 16글자.
 
-FRONT_BASE_URL = "localhost:3000"
+FRONT_BASE_URL = os.getenv('FRONT_BASE_URL', 'http://localhost:3000')
+
+
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
