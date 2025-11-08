@@ -1,4 +1,4 @@
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
 class HasLevelPermission(BasePermission):
@@ -18,7 +18,7 @@ class HasLevelPermission(BasePermission):
 
         # Grant access if the user's level matches the required level.
         # You could also use <= for minimum level of access.
-        return request.user.level == self.required_level
+        return request.user.is_authenticated and request.user.level == self.required_level
 
 
 class IsLevel1User(HasLevelPermission):
@@ -26,3 +26,15 @@ class IsLevel1User(HasLevelPermission):
     Allows access only to users with level = 1.
     """
     required_level = 1
+
+
+class IsLevel1UserOrReadOnly(IsLevel1User):
+    """
+    The request is authenticated as a user, or is a read-only request.
+    """
+
+    def has_permission(self, request, view):
+        if request.method in SAFE_METHODS:
+            return True
+
+        return super().has_permission(request, view)

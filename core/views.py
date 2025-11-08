@@ -3,9 +3,10 @@ from django.db.models import F, Sum
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated, SAFE_METHODS
 
 from core.paginations import PostPagination
+from shared.permissions import IsLevel1UserOrReadOnly
 from .models import Gallery, Post, Comment, PostVote, CommentVote
 from .serializers import GallerySerializer, PostListSerializer, PostSerializer, CommentSerializer
 from .permissions import IsAuthorOrReadOnly
@@ -16,7 +17,7 @@ from datetime import timedelta
 class GalleryViewSet(viewsets.ModelViewSet):
     queryset = Gallery.objects.all().order_by('id')
     serializer_class = GallerySerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly, IsLevel1UserOrReadOnly]
     # filter_backends = [filters.SearchFilter]
     filterset_fields = ['slug', 'title']
     ordering_fields = ['created_at', 'title']
@@ -30,8 +31,8 @@ class PostViewSet(viewsets.ModelViewSet):
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
     search_fields = ['title', 'content', 'nickname']
-    ordering_fields = ['is_notice', 'created_at',
-                       'updated_at', 'views', 'recommend']
+    ordering = ['-is_notice', '-created_at', '-updated_at']
+    ordering_fields = ['is_notice', 'created_at', 'updated_at']
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -43,6 +44,8 @@ class PostViewSet(viewsets.ModelViewSet):
         gallery_slug = self.request.query_params.get('gallery')
         if gallery_slug:
             qs = qs.filter(gallery__slug=gallery_slug)
+        if not self.request.method in SAFE_METHODS:
+            qs = qs.select_related('gallery')
         return qs
 
     def get_object(self):
