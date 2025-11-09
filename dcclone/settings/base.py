@@ -72,7 +72,7 @@ DATABASES = {'default': dj_database_url.parse(os.getenv(
 
 AUTH_USER_MODEL = 'users.User'
 LANGUAGE_CODE = 'ko-kr'
-TIME_ZONE = 'Asia/Seoul'
+TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 

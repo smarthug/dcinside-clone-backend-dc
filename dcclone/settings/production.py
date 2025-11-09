@@ -14,4 +14,4 @@ DATABASES = {"default": {
 STATIC_URL = '/static_b/'
 STATIC_ROOT = Path('/front/static')
 MEDIA_URL = '/media/'
-MEDIA_ROOT = Path('/media')
+MEDIA_ROOT = Path('/api/file')
