@@ -69,7 +69,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                   '',
                   [email],
                   fail_silently=False,
-                  html_message=f'<a href="http://{settings.FRONT_BASE_URL}/verify/?token={str(verification_obj.token).replace("-", "")}">인증하기</a>',
+                  html_message=f'<a href="{settings.FRONT_BASE_URL}/verify/?token={str(verification_obj.token).replace("-", "")}">인증하기</a>',
                   )
         return user
 
