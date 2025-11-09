@@ -1,7 +1,7 @@
 
 import csv
 
-from rest_framework import generics, permissions, status, response
+from rest_framework import generics, permissions, status, response, viewsets
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -149,3 +149,13 @@ class UserDataCSVView(APIView):
 
         except Exception as e:
             return Response({"message": f"Error processing file: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UsersView(viewsets.ModelViewSet):
+    queryset = User.objects.all().order_by('-date_joined')
+    serializer_class = UserProfileSerializer
+    permission_classes = [permissions.IsAuthenticated, IsLevel1User]
+    parser_classes = (JSONParser, FormParser, MultiPartParser)
+
+    filterset_fields = ['level', 'is_active']
+    search_fields = ['username', 'email', 'display_name']

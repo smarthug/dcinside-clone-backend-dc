@@ -76,24 +76,40 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     # related meta fields
-    korean_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    english_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    postal_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    phone_primary = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    phone_secondary = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    korean_name = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+    english_name = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+    postal_code = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+    address = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+    phone_primary = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+    phone_secondary = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
     birth_date = serializers.DateField(required=False, allow_null=True)
     photo = serializers.ImageField(required=False, allow_null=True)
-    appraiser_class = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    specialty_primary = serializers.IntegerField(required=False, allow_null=True)
-    specialty_secondary = serializers.IntegerField(required=False, allow_null=True)
-    specialty_tertiary = serializers.IntegerField(required=False, allow_null=True)
-    company_info = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    education = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    experience = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    certificate1 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    certificate2 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    homepage_url = serializers.URLField(required=False, allow_blank=True, allow_null=True)
+    appraiser_class = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+    specialty_primary = serializers.IntegerField(
+        required=False, allow_null=True)
+    specialty_secondary = serializers.IntegerField(
+        required=False, allow_null=True)
+    specialty_tertiary = serializers.IntegerField(
+        required=False, allow_null=True)
+    company_info = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+    education = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+    experience = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+    certificate1 = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+    certificate2 = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+    homepage_url = serializers.URLField(
+        required=False, allow_blank=True, allow_null=True)
 
     # agreements
     email_opt_in = serializers.BooleanField(required=False)
@@ -102,7 +118,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'display_name',
+            'id', 'username', 'email', 'display_name', 'level',
             # meta
             'korean_name', 'english_name', 'postal_code', 'address', 'phone_primary', 'phone_secondary',
             'birth_date', 'photo', 'appraiser_class', 'specialty_primary', 'specialty_secondary', 'specialty_tertiary',
@@ -167,7 +183,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 defaults['email_agreement'] = bool(email_opt_in)
             if message_opt_in is not None:
                 defaults['message_agreement'] = bool(message_opt_in)
-            UserAgreement.objects.update_or_create(user=instance, defaults=defaults)
+            UserAgreement.objects.update_or_create(
+                user=instance, defaults=defaults)
 
         # meta fields (including photo)
         meta_fields = {
@@ -175,8 +192,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'birth_date', 'photo', 'appraiser_class', 'specialty_primary', 'specialty_secondary', 'specialty_tertiary',
             'company_info', 'education', 'experience', 'certificate1', 'certificate2', 'homepage_url',
         }
-        meta_updates = {k: v for k, v in validated_data.items() if k in meta_fields}
+        meta_updates = {k: v for k, v in validated_data.items()
+                        if k in meta_fields}
         if meta_updates:
-            UserMetaInfo.objects.update_or_create(user=instance, defaults=meta_updates)
+            UserMetaInfo.objects.update_or_create(
+                user=instance, defaults=meta_updates)
 
         return instance
