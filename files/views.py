@@ -46,7 +46,8 @@ class FileView(generics.GenericAPIView, mixins.ListModelMixin, mixins.CreateMode
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
         # Return a response with the file URL
-        return Response({'url': serializer.data.get('file'), 'filename': serializer.data.get('filename')}, status=status.HTTP_201_CREATED, headers=headers)
+        pk = str(serializer.data.get('id'))
+        return Response({'url': f'/api/files/{pk}/', 'filename': serializer.data.get('filename')}, status=status.HTTP_201_CREATED, headers=headers)
 
     # @action(detail=True, methods=['post'])
     # def list(self, request, *args, **kwargs):
