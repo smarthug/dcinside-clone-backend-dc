@@ -32,7 +32,6 @@ class IsAuthorOrReadOnly(IsLevel1User):
         return request.user.is_authenticated and _p.permission_write >= request.user.level
 
     def has_object_permission(self, request, view, obj):
-        print("AA")
         if request.method in SAFE_METHODS:
             return obj.gallery.permission_read == 100 or (request.user.is_authenticated and obj.gallery.permission_read >= request.user.level)
 
