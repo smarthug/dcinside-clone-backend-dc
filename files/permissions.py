@@ -1,0 +1,42 @@
+
+from rest_framework.permissions import SAFE_METHODS
+
+from core.models import Gallery
+from shared.permissions import IsLevel1User
+
+
+class IsAuthorOrReadOnly(IsLevel1User):
+
+    def has_permission(self, request, view):
+        # if view.action != 'list' and request.method in SAFE_METHODS:
+        if request.method in SAFE_METHODS:
+            return True
+
+        if super().has_permission(request, view):
+            return True
+
+        gallery_slug = request.data.get('gallery', None)
+
+        if not gallery_slug:
+            return False
+
+        _p = Gallery.objects.filter(slug=gallery_slug)[:1].only(
+            'permission_write', 'permission_read')
+
+        if not _p:
+            return False
+
+        if request.method in SAFE_METHODS:
+            return _p.permission_read == 100 or (request.user.is_authenticated and _p.permission_read >= request.user.level)
+
+        return request.user.is_authenticated and _p.permission_write >= request.user.level
+
+    def has_object_permission(self, request, view, obj):
+
+        if request.method in SAFE_METHODS:
+            return obj.gallery.permission_read == 100 or (request.user.is_authenticated and obj.gallery.permission_read >= request.user.level)
+
+        if not getattr(obj, 'author', None):
+            return request.user.is_authenticated and request.user.level == 1
+
+        return request.user.is_authenticated and (obj.author == request.user or request.user.level == 1)

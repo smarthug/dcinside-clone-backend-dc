@@ -19,11 +19,10 @@ class MediaFileSystemStorage(FileSystemStorage):
 
 
 def compute_hash(content, chunk_size=None) -> str:
-    content.seek(0)
     return blake3(content).hexdigest()
 
 
-def getFilename(content, filename):
+def get_filename(content, filename):
     file_ext = PurePath(filename).suffix
     file_root = compute_hash(content=content)
     # file_ext includes the dot.
@@ -32,11 +31,11 @@ def getFilename(content, filename):
     return PurePath("{0}/{1}".format(file_root[:2], file_root[2:])).with_suffix(file_ext)
 
 
-def getFilenameWithHash(hash):
+def get_filename_with_hash(_hash):
     # file_ext includes the dot.
-    if hash is None:
+    if _hash is None:
         raise ValidationError("")
-    return PurePath("{0}/{1}".format(hash[:2], hash[2:]))
+    return PurePath("{0}/{1}".format(_hash[:2], _hash[2:]))
 
 
 mfs = MediaFileSystemStorage()

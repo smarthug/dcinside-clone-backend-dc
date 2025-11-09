@@ -25,7 +25,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'core',
     'users',
-    'ads'
+    'ads',
+    'files'
 ]
 
 
