@@ -5,11 +5,11 @@ from ads.utils.fs import get_filename, mfs
 
 
 def upload_to_image_large(instance, filename):
-    return "media/ads/{0}".format(get_filename(instance.image_large.read(), filename))
+    return "public/ads/{0}".format(get_filename(instance.image_large.read(), filename))
 
 
 def upload_to_image_small(instance, filename):
-    return "media/ads/{0}".format(get_filename(instance.image_small.read(), filename))
+    return "public/ads/{0}".format(get_filename(instance.image_small.read(), filename))
 
 
 class AdManager(models.Manager):
