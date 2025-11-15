@@ -107,7 +107,7 @@ def download_file(conn, file_url, original_filename, board_name, post_created_at
                 """
                 INSERT INTO files_file (gallery_id, author_id, file, filename, created_at, is_deleted)
                 VALUES (%s, 1, %s, %s, %s, false)
-                ON CONFLICT (gallery_id, author_id, file) DO NOTHING
+                ON CONFLICT DO NOTHING
                 RETURNING id;
                 """,
                 (gallery_id, db_file_path, original_filename, post_created_at)
