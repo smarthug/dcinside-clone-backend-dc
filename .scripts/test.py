@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import PurePath
 import blake3
 import psycopg2  # DB 연결을 위해 추가
-from psycopg2.extras import DictCursor # 결과를 딕셔너리 형태로 받기 위해 추가
+from psycopg2.extras import DictCursor  # 결과를 딕셔너리 형태로 받기 위해 추가
 
 # --- 설정 ---
 
@@ -17,9 +17,10 @@ BASE_BOARD_URL = "http://www.kica0472.or.kr/php/board.php"
 
 # 크롤링 대상 게시판 'board' 목록
 BOARD_TABLES = [
-    # "intranet", "intranet2", "tech", "kicasosic", "kicanews",
-    # "dispute", "advertise", "datab"
-    "tech"
+    # "intranet", "intranet2", "kicasosic", "kicanews",
+    # "dispute", "advertise", "datab",
+    # "tech"
+    "kicasosic"
 ]
 
 # 데이터를 저장할 기본 디렉토리 (HTML 백업용으로 유지)
@@ -29,7 +30,8 @@ MEDIA_DIR_BASE = ".media"
 
 # DB 연결 정보 (Django의 .env 파일 활용)
 # 예: "postgres://postgres:postgres@localhost:5432/dcclone"
-DATABASE_URL = os.getenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dcclone")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dcclone")
 
 # 요청 시 사용할 헤더
 HEADERS = {
@@ -47,42 +49,52 @@ POLITE_DELAY = 0.5
 
 # --- 도우미 함수 ---
 
+
 def compute_hash(content) -> str:
     return blake3.blake3(content).hexdigest()
+
 
 def get_filename_from_content(content, original_filename):
     file_ext = PurePath(original_filename).suffix
     file_root = compute_hash(content=content)
-    path = PurePath("{0}/{1}".format(file_root[:2], file_root[2:])).with_suffix(file_ext)
+    path = PurePath(
+        "{0}/{1}".format(file_root[:2], file_root[2:])).with_suffix(file_ext)
     return str(path).replace("\\", "/")
 
+
 def get_detail_from_tr(soup, header_text):
-    header_td = soup.find('td', class_='b_detail_left', string=re.compile(header_text))
+    header_td = soup.find('td', class_='b_detail_left',
+                          string=re.compile(header_text))
     if header_td and header_td.find_next_sibling('td'):
         return header_td.find_next_sibling('td').get_text(strip=True)
     return None
+
 
 def download_file(conn, file_url, original_filename, board_name, post_created_at):
     """주어진 URL에서 파일을 다운로드하고, DB에 파일 정보를 저장합니다."""
     try:
         print(f"    > 첨부파일 다운로드 시도: {file_url}")
-        response = requests.get(file_url, headers=HEADERS, cookies=COOKIES, stream=True)
+        response = requests.get(file_url, headers=HEADERS,
+                                cookies=COOKIES, stream=True)
         response.raise_for_status()
 
         file_content = response.content
-        django_path = get_filename_from_content(file_content, original_filename)
+        django_path = get_filename_from_content(
+            file_content, original_filename)
         full_save_path = os.path.join(MEDIA_DIR_BASE, django_path)
         save_dir = os.path.dirname(full_save_path)
         os.makedirs(save_dir, exist_ok=True)
 
         with open(full_save_path, 'wb') as f:
             f.write(file_content)
-        print(f"    [Success] 파일 저장 완료: {full_save_path} (원본: {original_filename})")
+        print(
+            f"    [Success] 파일 저장 완료: {full_save_path} (원본: {original_filename})")
 
         # --- DB에 파일 정보 저장 ---
         with conn.cursor() as cur:
             # 갤러리 ID 조회
-            cur.execute("SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
+            cur.execute(
+                "SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
             gallery_record = cur.fetchone()
             if not gallery_record:
                 print(f"    [Error] DB에서 갤러리를 찾을 수 없습니다: {board_name}")
@@ -91,7 +103,7 @@ def download_file(conn, file_url, original_filename, board_name, post_created_at
 
             # File 모델의 'file' 필드는 'private/' 접두사를 포함
             db_file_path = f"private/{django_path}"
-            
+
             cur.execute(
                 """
                 INSERT INTO files_file (gallery_id, author_id, file, filename, created_at, is_deleted)
@@ -113,20 +125,27 @@ def download_file(conn, file_url, original_filename, board_name, post_created_at
 
 # --- 크롤러 함수 ---
 
-def fetch_page(url):
+
+def fetch_page(url, board_name=None):
     try:
-        response = requests.get(url, headers=HEADERS, cookies=COOKIES, timeout=10)
+        request_cookies = COOKIES
+        if board_name == "kicanews":
+            request_cookies = None
+        response = requests.get(url, headers=HEADERS,
+                                cookies=request_cookies, timeout=10)
         response.raise_for_status()
-        response.encoding = 'euc-kr'
+        response.encoding = "euc-kr"
         return response
     except requests.exceptions.RequestException as e:
         print(f"  [Error] 페이지를 가져오는 중 오류 발생 ({url}): {e}")
         return None
 
+
 def parse_and_save_post(conn, post_response, board_name):
     """게시글 응답을 파싱하여 DB에 저장하고 첨부파일을 다운로드합니다."""
     post_url = post_response.url
-    soup = BeautifulSoup(post_response.content.decode('euc-kr', 'replace'), "html.parser")
+    soup = BeautifulSoup(post_response.content.decode(
+        'euc-kr', 'replace'), "html.parser")
 
     title = get_detail_from_tr(soup, '제목')
     nickname = get_detail_from_tr(soup, '작성자')
@@ -146,30 +165,36 @@ def parse_and_save_post(conn, post_response, board_name):
     content = content_body.decode_contents() if content_body else ''
 
     attachments = []
-    file_links = soup.find_all('td', class_='b_detail_left', string=re.compile('파일첨부'))
+    file_links = soup.find_all(
+        'td', class_='b_detail_left', string=re.compile('파일첨부'))
     for file_link_header in file_links:
         file_link_data = file_link_header.find_next_sibling('td')
-        if not file_link_data: continue
+        if not file_link_data:
+            continue
         onclick_attr = file_link_data.find('span', onclick=True)
-        if not onclick_attr: continue
+        if not onclick_attr:
+            continue
 
         match = re.search(r"OpenWin_smart\('([^']*)'", onclick_attr['onclick'])
         if match:
             relative_url = match.group(1)
             file_download_url = urljoin(post_url, relative_url)
             img_tag = file_link_data.find('img')
-            original_name_from_tag = img_tag.next_sibling.strip() if img_tag and img_tag.next_sibling else onclick_attr.get_text(strip=True)
+            original_name_from_tag = img_tag.next_sibling.strip(
+            ) if img_tag and img_tag.next_sibling else onclick_attr.get_text(strip=True)
             if not original_name_from_tag:
                 print(f"  [Warning] span 태그에서 파일명을 찾을 수 없습니다: {onclick_attr}")
                 continue
 
-            media_path, original_name, file_id = download_file(conn, file_download_url, original_name_from_tag, board_name, created_at_iso)
+            media_path, original_name, file_id = download_file(
+                conn, file_download_url, original_name_from_tag, board_name, created_at_iso)
             if media_path and original_name and file_id:
-                attachments.append({'path': media_path, 'name': original_name, 'id': file_id})
+                attachments.append(
+                    {'path': media_path, 'name': original_name, 'id': file_id})
 
     # --- 대표 이미지 찾기 및 본문에 첨부파일 추가 ---
     representative_image_path = None
-    image_extensions = ('.jpg', '.jpeg', '.png')
+    image_extensions = ('.jpg', '.jpeg', '.png', '.gif')
 
     if attachments:
         content += "\n\n--- 첨부파일 ---\n"
@@ -181,17 +206,19 @@ def parse_and_save_post(conn, post_response, board_name):
                 content += f'<a href="/api/files/{att["id"]}/">{att["name"]}</a>\n'
 
             if is_image and not representative_image_path:
-                representative_image_path = f'/api/files/{att["id"]}/' # Post.image 필드는 upload_to='posts/'
+                # Post.image 필드는 upload_to='posts/'
+                representative_image_path = f'/api/files/{att["id"]}/'
 
     # --- DB에 게시글 저장 ---
     try:
         with conn.cursor() as cur:
             # 갤러리 ID 조회
-            cur.execute("SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
+            cur.execute(
+                "SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
             gallery_record = cur.fetchone()
             if not gallery_record:
                 print(f"  [Error] DB에서 갤러리를 찾을 수 없습니다: {board_name}")
-                conn.rollback() # 현재 트랜잭션 롤백
+                conn.rollback()  # 현재 트랜잭션 롤백
                 return
             gallery_id = gallery_record[0]
 
@@ -201,18 +228,111 @@ def parse_and_save_post(conn, post_response, board_name):
                 """
                 INSERT INTO core_post (
                     gallery_id, title, content, nickname, created_at, updated_at, is_notice, image,
-                    author_id, recommend, views, is_delete, is_pending
+                    author_id, recommend, views, is_delete, is_pending, external_link
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1, 0, 0, false, false)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1, 0, 0, false, false, NULL)
                 ON CONFLICT DO NOTHING;
                 """,
-                (gallery_id, title, content, nickname, created_at_iso, created_at_iso, is_notice, representative_image_path)
+                (gallery_id, title, content, nickname, created_at_iso,
+                 created_at_iso, is_notice, representative_image_path)
             )
-        conn.commit() # 게시글과 모든 첨부파일 정보를 하나의 트랜잭션으로 커밋
+        conn.commit()  # 게시글과 모든 첨부파일 정보를 하나의 트랜잭션으로 커밋
         print(f"  [Success] DB에 게시글 저장 완료: {title}")
     except Exception as e:
         print(f"  [Error] DB에 게시글 저장 중 오류 발생: {e}")
-        conn.rollback() # 오류 발생 시 롤백
+        conn.rollback()  # 오류 발생 시 롤백
+
+
+def crawl_kicanews_board(conn, board_name):
+    """'kicanews' 게시판을 크롤링하여 DB에 저장합니다. (외부 링크 방식)"""
+    print(f"\n--- '{board_name}' 게시판 크롤링 시작 (외부 링크 방식) ---")
+
+    page = 1
+    while True:
+        board_list_url = f"{BASE_BOARD_URL}?board={board_name}&page={page}"
+        print(f"\n- {page} 페이지 목록을 확인합니다: {board_list_url}")
+
+        response = fetch_page(board_list_url, board_name=board_name)
+        if response is None:
+            print(f"  ! {page} 페이지를 가져올 수 없어 {board_name} 게시판을 중단합니다.")
+            break
+
+        soup = BeautifulSoup(response.content.decode(
+            'euc-kr', 'replace'), "html.parser")
+        post_divs = soup.select("div.report_list")
+
+        if not post_divs:
+            print(f"- {page} 페이지에 게시글이 없습니다. '{board_name}' 게시판 크롤링 완료.")
+            break
+
+        print(f"- {page} 페이지에서 {len(post_divs)}개의 게시글 링크를 찾았습니다.")
+
+        for post_div in post_divs:
+            onclick_attr = post_div.get('onclick', '')
+            match = re.search(r"window\.open\('([^']*)'\)", onclick_attr)
+            if not match:
+                continue
+
+            external_link = match.group(1)
+            title = post_div.select_one(".news_board_title").get_text(
+                strip=True) if post_div.select_one(".news_board_title") else "제목 없음"
+            source = post_div.select_one(".news_board_data2").get_text(strip=True).replace(
+                "출처 :", "").strip() if post_div.select_one(".news_board_data2") else "출처 없음"
+
+            # --- 대표 이미지 처리 ---
+            representative_image_path = None
+            img_tag = post_div.select_one(".news_album img.list_thumbnail")
+            if img_tag and img_tag.get('src') and 'imgblank.gif' not in img_tag['src']:
+                img_relative_url = img_tag['src']
+                img_download_url = urljoin(board_list_url, img_relative_url)
+                original_filename = os.path.basename(
+                    urlparse(img_download_url).path)
+
+                # kicanews는 작성일 정보가 없으므로, 크롤링 시점을 사용
+                now_iso = datetime.now().isoformat()
+
+                _, _, file_id = download_file(
+                    conn, img_download_url, original_filename, board_name, now_iso
+                )
+                if file_id:
+                    representative_image_path = f"/api/files/{file_id}/"
+                    print(
+                        f"    [Success] 대표 이미지 설정 완료: {representative_image_path}")
+                else:
+                    print(f"    [Warning] 대표 이미지 다운로드 또는 DB 저장 실패.")
+
+            # kicanews는 게시글 상세 페이지가 없으므로, 목록에서 바로 DB에 저장
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
+                    gallery_id = cur.fetchone()[0]
+
+                    # 작성일 정보가 없으므로 크롤링 시점을 사용
+                    now_iso = datetime.now().isoformat()
+
+                    cur.execute(
+                        """
+                        INSERT INTO core_post (
+                            gallery_id, title, content, nickname, created_at, updated_at, is_notice, image,
+                            author_id, recommend, views, is_delete, is_pending, external_link,
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, false, %s, 1, 0, 0, false, false, %s)
+                        ON CONFLICT DO NOTHING;
+                        """,
+                        (gallery_id, title, f"외부 링크: {external_link}", source,
+                         now_iso, now_iso, representative_image_path, external_link)
+                    )
+                conn.commit()
+                print(f"  [Success] DB에 외부 링크 게시글 저장 완료: {title}")
+
+            except Exception as e:
+                print(f"  [Error] DB에 외부 링크 게시글 저장 중 오류 발생: {e}")
+                conn.rollback()
+
+            time.sleep(POLITE_DELAY)
+        page += 1
+
 
 def crawl_board(conn, board_name):
     """특정 게시판의 모든 게시글을 크롤링하여 DB에 저장합니다."""
@@ -220,28 +340,36 @@ def crawl_board(conn, board_name):
 
     # 갤러리가 DB에 존재하는지 확인
     with conn.cursor() as cur:
-        cur.execute("SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
+        cur.execute("SELECT id FROM core_gallery WHERE slug = %s",
+                    (board_name,))
         if cur.fetchone() is None:
             print(f"[Critical] '{board_name}' 갤러리가 DB에 존재하지 않습니다. 건너뜁니다.")
             print(f"         먼저 Django Admin이나 API를 통해 갤러리를 생성해주세요.")
             return
 
+    # kicanews는 처리 방식이 다르므로 분기
+    if board_name == "kicanews":
+        crawl_kicanews_board(conn, board_name)
+        return
+
     # --- 테스트용 설정: 처리할 게시글 수 제한 ---
     post_process_limit = 3
     processed_count = 0
-
+    
     page = 1
     while True:
         board_list_url = f"{BASE_BOARD_URL}?board={board_name}&page={page}"
         print(f"\n- {page} 페이지 목록을 확인합니다: {board_list_url}")
 
-        response = fetch_page(board_list_url)
+        response = fetch_page(board_list_url, board_name=board_name)
         if response is None:
             print(f"  ! {page} 페이지를 가져올 수 없어 {board_name} 게시판을 중단합니다.")
             break
 
-        soup = BeautifulSoup(response.content.decode('euc-kr', 'replace'), "html.parser")
-        post_links = soup.select(f"a[href*='board={board_name}'][href*='command=body'][href*='no=']")
+        soup = BeautifulSoup(response.content.decode(
+            'euc-kr', 'replace'), "html.parser")
+        post_links = soup.select(
+            f"a[href*='board={board_name}'][href*='command=body'][href*='no=']")
 
         unique_links = []
         seen_hrefs = set()
@@ -269,7 +397,7 @@ def crawl_board(conn, board_name):
                 post_url = urljoin(board_list_url, post_relative_url)
 
                 print(f"  > 게시글 처리 시도: {post_url}")
-                post_response = fetch_page(post_url)
+                post_response = fetch_page(post_url, board_name=board_name)
 
                 if post_response:
                     parse_and_save_post(conn, post_response, board_name)
@@ -286,11 +414,12 @@ def crawl_board(conn, board_name):
 
         page += 1
 
+
 def main():
     """메인 실행 함수"""
     print("--- KICA 웹사이트 크롤링 시작 ---")
     print(f"미디어 저장 위치: {os.path.abspath(MEDIA_DIR_BASE)}")
-    
+
     conn = None
     try:
         # 데이터베이스 연결
@@ -313,6 +442,7 @@ def main():
             print("\n데이터베이스 연결을 닫았습니다.")
 
     print("\n--- 모든 게시판 크롤링 완료 ---")
+
 
 if __name__ == "__main__":
     main()
