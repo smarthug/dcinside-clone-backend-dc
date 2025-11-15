@@ -19,9 +19,13 @@ BASE_BOARD_URL = "http://www.kica0472.or.kr/php/board.php"
 BOARD_TABLES = [
     # "intranet", "intranet2", "kicasosic", "kicanews",
     # "dispute", "advertise", "datab",
-    # "tech"
-    "kicasosic"
+    "kicanews"
 ]
+
+BOARD_TO_GALLERY_SLUG_MAP = {
+    "kicasosic": "news_kica",
+    "kicanews": "news_related",
+}
 
 # 데이터를 저장할 기본 디렉토리 (HTML 백업용으로 유지)
 SAVE_DIR_BASE = ".save_data"
@@ -94,10 +98,11 @@ def download_file(conn, file_url, original_filename, board_name, post_created_at
         with conn.cursor() as cur:
             # 갤러리 ID 조회
             cur.execute(
-                "SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
+                "SELECT id FROM core_gallery WHERE slug = %s", (BOARD_TO_GALLERY_SLUG_MAP[board_name],))
             gallery_record = cur.fetchone()
             if not gallery_record:
-                print(f"    [Error] DB에서 갤러리를 찾을 수 없습니다: {board_name}")
+                print(
+                    f"    [Error] DB에서 갤러리를 찾을 수 없습니다: {BOARD_TO_GALLERY_SLUG_MAP[board_name]}")
                 return None, None, None
             gallery_id = gallery_record[0]
 
@@ -214,10 +219,11 @@ def parse_and_save_post(conn, post_response, board_name):
         with conn.cursor() as cur:
             # 갤러리 ID 조회
             cur.execute(
-                "SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
+                "SELECT id FROM core_gallery WHERE slug = %s", (BOARD_TO_GALLERY_SLUG_MAP[board_name],))
             gallery_record = cur.fetchone()
             if not gallery_record:
-                print(f"  [Error] DB에서 갤러리를 찾을 수 없습니다: {board_name}")
+                print(
+                    f"  [Error] DB에서 갤러리를 찾을 수 없습니다: {BOARD_TO_GALLERY_SLUG_MAP[board_name]}")
                 conn.rollback()  # 현재 트랜잭션 롤백
                 return
             gallery_id = gallery_record[0]
@@ -247,6 +253,10 @@ def crawl_kicanews_board(conn, board_name):
     """'kicanews' 게시판을 크롤링하여 DB에 저장합니다. (외부 링크 방식)"""
     print(f"\n--- '{board_name}' 게시판 크롤링 시작 (외부 링크 방식) ---")
 
+    # --- 테스트용 설정: 처리할 게시글 수 제한 ---
+    post_process_limit = 3
+    processed_count = 0
+
     page = 1
     while True:
         board_list_url = f"{BASE_BOARD_URL}?board={board_name}&page={page}"
@@ -268,6 +278,11 @@ def crawl_kicanews_board(conn, board_name):
         print(f"- {page} 페이지에서 {len(post_divs)}개의 게시글 링크를 찾았습니다.")
 
         for post_div in post_divs:
+            # 테스트용 게시글 수 제한 확인
+            if processed_count >= post_process_limit:
+                print(f"\n[Info] 테스트용 게시글 처리 제한({post_process_limit}개)에 도달하여 크롤링을 중단합니다.")
+                break
+
             onclick_attr = post_div.get('onclick', '')
             match = re.search(r"window\.open\('([^']*)'\)", onclick_attr)
             if not match:
@@ -304,8 +319,8 @@ def crawl_kicanews_board(conn, board_name):
             # kicanews는 게시글 상세 페이지가 없으므로, 목록에서 바로 DB에 저장
             try:
                 with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
+                    cur.execute("SELECT id FROM core_gallery WHERE slug = %s",
+                                (BOARD_TO_GALLERY_SLUG_MAP[board_name],))
                     gallery_id = cur.fetchone()[0]
 
                     # 작성일 정보가 없으므로 크롤링 시점을 사용
@@ -315,7 +330,7 @@ def crawl_kicanews_board(conn, board_name):
                         """
                         INSERT INTO core_post (
                             gallery_id, title, content, nickname, created_at, updated_at, is_notice, image,
-                            author_id, recommend, views, is_delete, is_pending, external_link,
+                            author_id, recommend, views, is_delete, is_pending, external_link
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, false, %s, 1, 0, 0, false, false, %s)
                         ON CONFLICT DO NOTHING;
@@ -326,11 +341,18 @@ def crawl_kicanews_board(conn, board_name):
                 conn.commit()
                 print(f"  [Success] DB에 외부 링크 게시글 저장 완료: {title}")
 
+                processed_count += 1  # 처리된 게시글 수 증가
+
             except Exception as e:
                 print(f"  [Error] DB에 외부 링크 게시글 저장 중 오류 발생: {e}")
                 conn.rollback()
 
             time.sleep(POLITE_DELAY)
+
+        # 루프 종료 조건 확인
+        if processed_count >= post_process_limit:
+            break
+
         page += 1
 
 
@@ -341,7 +363,7 @@ def crawl_board(conn, board_name):
     # 갤러리가 DB에 존재하는지 확인
     with conn.cursor() as cur:
         cur.execute("SELECT id FROM core_gallery WHERE slug = %s",
-                    (board_name,))
+                    (BOARD_TO_GALLERY_SLUG_MAP[board_name],))
         if cur.fetchone() is None:
             print(f"[Critical] '{board_name}' 갤러리가 DB에 존재하지 않습니다. 건너뜁니다.")
             print(f"         먼저 Django Admin이나 API를 통해 갤러리를 생성해주세요.")
@@ -355,7 +377,7 @@ def crawl_board(conn, board_name):
     # --- 테스트용 설정: 처리할 게시글 수 제한 ---
     post_process_limit = 3
     processed_count = 0
-    
+
     page = 1
     while True:
         board_list_url = f"{BASE_BOARD_URL}?board={board_name}&page={page}"

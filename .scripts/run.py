@@ -22,6 +22,11 @@ BOARD_TABLES = [
     "tech"
 ]
 
+BOARD_TO_GALLERY_SLUG_MAP = {
+    "kicanews": "news_kica",
+    "kicasosic": "news_related",
+}
+
 # 데이터를 저장할 기본 디렉토리 (HTML 백업용으로 유지)
 SAVE_DIR_BASE = ".save_data"
 # 미디어 파일(첨부파일)을 저장할 디렉토리
@@ -93,10 +98,11 @@ def download_file(conn, file_url, original_filename, board_name, post_created_at
         with conn.cursor() as cur:
             # 갤러리 ID 조회
             cur.execute(
-                "SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
+                "SELECT id FROM core_gallery WHERE slug = %s", (BOARD_TO_GALLERY_SLUG_MAP[board_name],))
             gallery_record = cur.fetchone()
             if not gallery_record:
-                print(f"    [Error] DB에서 갤러리를 찾을 수 없습니다: {board_name}")
+                print(
+                    f"    [Error] DB에서 갤러리를 찾을 수 없습니다: {BOARD_TO_GALLERY_SLUG_MAP[board_name]}")
                 return None, None, None
             gallery_id = gallery_record[0]
 
@@ -130,7 +136,8 @@ def fetch_page(url, board_name=None):
         request_cookies = COOKIES
         if board_name == "kicanews":
             request_cookies = None
-        response = requests.get(url, headers=HEADERS, cookies=request_cookies, timeout=10)
+        response = requests.get(url, headers=HEADERS,
+                                cookies=request_cookies, timeout=10)
         response.raise_for_status()
         response.encoding = "euc-kr"
         return response
@@ -212,10 +219,11 @@ def parse_and_save_post(conn, post_response, board_name):
         with conn.cursor() as cur:
             # 갤러리 ID 조회
             cur.execute(
-                "SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
+                "SELECT id FROM core_gallery WHERE slug = %s", (BOARD_TO_GALLERY_SLUG_MAP[board_name],))
             gallery_record = cur.fetchone()
             if not gallery_record:
-                print(f"  [Error] DB에서 갤러리를 찾을 수 없습니다: {board_name}")
+                print(
+                    f"  [Error] DB에서 갤러리를 찾을 수 없습니다: {BOARD_TO_GALLERY_SLUG_MAP[board_name]}")
                 conn.rollback()  # 현재 트랜잭션 롤백
                 return
             gallery_id = gallery_record[0]
@@ -255,7 +263,8 @@ def crawl_kicanews_board(conn, board_name):
             print(f"  ! {page} 페이지를 가져올 수 없어 {board_name} 게시판을 중단합니다.")
             break
 
-        soup = BeautifulSoup(response.content.decode('euc-kr', 'replace'), "html.parser")
+        soup = BeautifulSoup(response.content.decode(
+            'euc-kr', 'replace'), "html.parser")
         post_divs = soup.select("div.report_list")
 
         if not post_divs:
@@ -271,8 +280,10 @@ def crawl_kicanews_board(conn, board_name):
                 continue
 
             external_link = match.group(1)
-            title = post_div.select_one(".news_board_title").get_text(strip=True) if post_div.select_one(".news_board_title") else "제목 없음"
-            source = post_div.select_one(".news_board_data2").get_text(strip=True).replace("출처 :", "").strip() if post_div.select_one(".news_board_data2") else "출처 없음"
+            title = post_div.select_one(".news_board_title").get_text(
+                strip=True) if post_div.select_one(".news_board_title") else "제목 없음"
+            source = post_div.select_one(".news_board_data2").get_text(strip=True).replace(
+                "출처 :", "").strip() if post_div.select_one(".news_board_data2") else "출처 없음"
 
             # --- 대표 이미지 처리 ---
             representative_image_path = None
@@ -280,7 +291,8 @@ def crawl_kicanews_board(conn, board_name):
             if img_tag and img_tag.get('src') and 'imgblank.gif' not in img_tag['src']:
                 img_relative_url = img_tag['src']
                 img_download_url = urljoin(board_list_url, img_relative_url)
-                original_filename = os.path.basename(urlparse(img_download_url).path)
+                original_filename = os.path.basename(
+                    urlparse(img_download_url).path)
 
                 # kicanews는 작성일 정보가 없으므로, 크롤링 시점을 사용
                 now_iso = datetime.now().isoformat()
@@ -290,14 +302,16 @@ def crawl_kicanews_board(conn, board_name):
                 )
                 if file_id:
                     representative_image_path = f"/api/files/{file_id}/"
-                    print(f"    [Success] 대표 이미지 설정 완료: {representative_image_path}")
+                    print(
+                        f"    [Success] 대표 이미지 설정 완료: {representative_image_path}")
                 else:
                     print(f"    [Warning] 대표 이미지 다운로드 또는 DB 저장 실패.")
 
             # kicanews는 게시글 상세 페이지가 없으므로, 목록에서 바로 DB에 저장
             try:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT id FROM core_gallery WHERE slug = %s", (board_name,))
+                    cur.execute("SELECT id FROM core_gallery WHERE slug = %s",
+                                (BOARD_TO_GALLERY_SLUG_MAP[board_name],))
                     gallery_id = cur.fetchone()[0]
 
                     # 작성일 정보가 없으므로 크롤링 시점을 사용
@@ -307,12 +321,13 @@ def crawl_kicanews_board(conn, board_name):
                         """
                         INSERT INTO core_post (
                             gallery_id, title, content, nickname, created_at, updated_at, is_notice, image,
-                            author_id, recommend, views, is_delete, is_pending, external_link,
+                            author_id, recommend, views, is_delete, is_pending, external_link
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, false, %s, 1, 0, 0, false, false, %s)
                         ON CONFLICT DO NOTHING;
                         """,
-                        (gallery_id, title, f"외부 링크: {external_link}", source, now_iso, now_iso, representative_image_path, external_link)
+                        (gallery_id, title, f"외부 링크: {external_link}", source,
+                         now_iso, now_iso, representative_image_path, external_link)
                     )
                 conn.commit()
                 print(f"  [Success] DB에 외부 링크 게시글 저장 완료: {title}")
@@ -332,7 +347,7 @@ def crawl_board(conn, board_name):
     # 갤러리가 DB에 존재하는지 확인
     with conn.cursor() as cur:
         cur.execute("SELECT id FROM core_gallery WHERE slug = %s",
-                    (board_name,))
+                    (BOARD_TO_GALLERY_SLUG_MAP[board_name],))
         if cur.fetchone() is None:
             print(f"[Critical] '{board_name}' 갤러리가 DB에 존재하지 않습니다. 건너뜁니다.")
             print(f"         먼저 Django Admin이나 API를 통해 갤러리를 생성해주세요.")
