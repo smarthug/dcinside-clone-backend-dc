@@ -168,11 +168,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
         # pull user fields
         email = validated_data.pop('email', None)
         display_name = validated_data.pop('display_name', None)
+        level = validated_data.pop('level', None)
+        
         if email is not None:
             instance.email = email
         if display_name is not None:
             instance.display_name = display_name
-        instance.save(update_fields=['email', 'display_name'])
+        if level is not None:
+            instance.level = level
+            
+        instance.save(update_fields=['email', 'display_name', 'level'])
 
         # agreements
         email_opt_in = validated_data.pop('email_opt_in', None)

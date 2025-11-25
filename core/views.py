@@ -46,7 +46,14 @@ class PostViewSet(viewsets.ModelViewSet):
             qs = qs.filter(gallery__slug=gallery_slug)
         if not self.request.method in SAFE_METHODS:
             qs = qs.select_related('gallery')
+        
+        # Filter out soft-deleted posts
+        qs = qs.filter(is_delete=False)
         return qs
+
+    def perform_destroy(self, instance):
+        instance.is_delete = True
+        instance.save(update_fields=['is_delete'])
 
     def get_object(self):
         return super().get_object()
