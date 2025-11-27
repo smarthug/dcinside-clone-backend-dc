@@ -63,13 +63,32 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             user=user,
         )
 
-        send_mail('[한국건설감정사회] 회원가입 이메일인증 입니다.',
-                  #   '<div style="width: fit-content; min-width:100%;">',
-                  'rokkor0472@gmail.com',
+        verification_link = f"{settings.FRONT_BASE_URL}/verify/?token={verification_obj.token}"
+        
+        html_message = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+            <h2 style="color: #333; text-align: center;">이메일 인증 안내</h2>
+            <p style="color: #555; line-height: 1.6;">
+                안녕하세요, {display_name}님.<br>
+                한국건설감정사회 회원가입을 환영합니다.<br>
+                아래 버튼을 클릭하여 이메일 인증을 완료해 주세요.
+            </p>
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{verification_link}" style="background-color: #007bff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">이메일 인증하기</a>
+            </div>
+            <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
+                본 메일은 발신 전용입니다.<br>
+                요청하지 않으셨다면 이 메일을 무시해 주세요.
+            </p>
+        </div>
+        """
+
+        send_mail('[한국건설감정사회] 회원가입 이메일 인증 안내',
                   '',
+                  settings.DEFAULT_FROM_EMAIL,
                   [email],
                   fail_silently=False,
-                  html_message=f'<a href="{settings.FRONT_BASE_URL}/verify/?token={str(verification_obj.token).replace("-", "")}">인증하기</a>',
+                  html_message=html_message,
                   )
         return user
 

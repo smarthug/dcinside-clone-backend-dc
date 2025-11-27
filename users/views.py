@@ -7,6 +7,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.utils import timezone
 from django.http import HttpResponse
+from django.core.mail import send_mail
+from django.conf import settings
 
 from shared.permissions import IsLevel1User
 
@@ -53,7 +55,7 @@ class UserVerifyView(generics.CreateAPIView):
         print("Received token:", token)
         try:
             user_verification = UserVerification.objects.get(token=token)
-            if (user_verification.created_at + timezone.timedelta(minutes=24)) > timezone.now():
+            if (user_verification.created_at + timezone.timedelta(minutes=24)) < timezone.now():
                 return response.Response({"message": "Token expired"}, status=status.HTTP_400_BAD_REQUEST)
 
             user_verification.user.is_active = True
@@ -64,8 +66,53 @@ class UserVerifyView(generics.CreateAPIView):
         except UserVerification.DoesNotExist:
             return response.Response({"message": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
 
-# class UserFindView(generics.APIVi):
-#     pass
+class UserFindIDView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+
+        if not email:
+            return Response({"message": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+            
+            html_message = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+                <h2 style="color: #333; text-align: center;">아이디 찾기 안내</h2>
+                <p style="color: #555; line-height: 1.6;">
+                    안녕하세요.<br>
+                    요청하신 아이디 정보를 안내해 드립니다.<br>
+                    회원님의 아이디는 <strong>{user.username}</strong> 입니다.
+                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{settings.FRONT_BASE_URL}/auth/login" style="background-color: #007bff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">로그인 하러가기</a>
+                </div>
+                <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
+                    본 메일은 발신 전용입니다.<br>
+                    요청하지 않으셨다면 이 메일을 무시해 주세요.
+                </p>
+            </div>
+            """
+
+            send_mail(
+                '[한국건설감정사회] 아이디 찾기 안내',
+                '',
+                settings.DEFAULT_FROM_EMAIL,
+                [email],
+                fail_silently=False,
+                html_message=html_message
+            )
+
+            return Response({"message": "아이디가 이메일로 발송되었습니다."}, status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            # For security, we might want to return 200 even if user not found, but for UX we return 404 here as per typical requirement unless specified otherwise.
+            # Given the previous context, explicit error seems preferred.
+            return Response({"message": "해당 이메일로 가입된 계정을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserLevelView(generics.RetrieveAPIView):
@@ -275,3 +322,157 @@ class UsersView(viewsets.ModelViewSet):
 
     filterset_fields = ['level', 'is_active']
     search_fields = ['username', 'email', 'display_name']
+
+
+class UserPasswordResetRequestView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        username = request.data.get('username')
+        email = request.data.get('resetEmail')
+
+        if not all([username, email]):
+             return Response({"message": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Check if user exists with matching details
+            user = User.objects.get(username=username, email=email)
+
+            # Create or update verification token
+            verification, created = UserVerification.objects.update_or_create(user=user)
+            
+            # Send email
+            reset_link = f"{settings.FRONT_BASE_URL}/auth/reset-password?token={verification.token}"
+            
+            html_message = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+                <h2 style="color: #333; text-align: center;">비밀번호 재설정 안내</h2>
+                <p style="color: #555; line-height: 1.6;">
+                    안녕하세요, {username}님.<br>
+                    비밀번호 재설정을 요청하셔서 안내 메일을 보내드립니다.<br>
+                    아래 버튼을 클릭하여 비밀번호를 재설정해 주세요.
+                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{reset_link}" style="background-color: #007bff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">비밀번호 재설정</a>
+                </div>
+                <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
+                    본 메일은 발신 전용입니다.<br>
+                    요청하지 않으셨다면 이 메일을 무시해 주세요.
+                </p>
+            </div>
+            """
+            
+            send_mail(
+                subject='[한국건설감정사회] 비밀번호 재설정 안내',
+                message='', # Plain text version could be added here
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+                html_message=html_message
+            )
+
+            return Response({"message": "Password reset email sent."}, status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            # For security, we might want to return 200 even if user not found, 
+            # but for this specific request "find user id and password", explicit error might be expected.
+            # Let's return a generic error or specific one depending on requirements. 
+            # Given the context of "Find Password", telling them it's wrong is usually helpful UX vs security trade-off.
+            return Response({"message": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UserPasswordResetConfirmView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        token = request.data.get('token')
+        password = request.data.get('password')
+        password_confirm = request.data.get('passwordConfirm')
+
+        if not all([token, password, password_confirm]):
+            return Response({"message": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if password != password_confirm:
+            return Response({"message": "Passwords must match."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user_verification = UserVerification.objects.get(token=token)
+            
+            # Check expiry (e.g., 24 hours)
+            if (user_verification.created_at + timezone.timedelta(hours=24)) < timezone.now():
+                 return Response({"message": "Token expired."}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = user_verification.user
+            user.set_password(password)
+            user.save()
+            
+            # Delete verification token after use
+            user_verification.delete()
+
+            return Response({"message": "Password has been reset successfully."}, status=status.HTTP_200_OK)
+
+        except UserVerification.DoesNotExist:
+            return Response({"message": "Invalid token."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework.exceptions import AuthenticationFailed
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        try:
+            return super().validate(attrs)
+        except AuthenticationFailed as e:
+            # Check if it's due to inactive user
+            user = User.objects.filter(username=attrs.get(self.username_field)).first()
+            if user and not user.is_active:
+                # Check verification status
+                verification, created = UserVerification.objects.get_or_create(user=user)
+                
+                # If token expired or created new, resend email
+                if created or (verification.created_at + timezone.timedelta(minutes=24)) < timezone.now():
+                    # Update token (delete old and create new to refresh timestamp/token)
+                    verification.delete()
+                    verification = UserVerification.objects.create(user=user)
+                    
+                    verification_link = f"{settings.FRONT_BASE_URL}/verify/?token={verification.token}"
+                    
+                    html_message = f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+                        <h2 style="color: #333; text-align: center;">이메일 인증 안내 (재발송)</h2>
+                        <p style="color: #555; line-height: 1.6;">
+                            안녕하세요, {user.display_name or user.username}님.<br>
+                            이메일 인증이 완료되지 않아 로그인할 수 없습니다.<br>
+                            아래 버튼을 클릭하여 이메일 인증을 완료해 주세요.
+                        </p>
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="{verification_link}" style="background-color: #007bff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">이메일 인증하기</a>
+                        </div>
+                        <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
+                            본 메일은 발신 전용입니다.<br>
+                            요청하지 않으셨다면 이 메일을 무시해 주세요.
+                        </p>
+                    </div>
+                    """
+                    
+                    send_mail(
+                        '[한국건설감정사회] 이메일 인증 안내 (재발송)',
+                        '',
+                        settings.DEFAULT_FROM_EMAIL,
+                        [user.email],
+                        fail_silently=False,
+                        html_message=html_message
+                    )
+                    raise AuthenticationFailed("이메일 인증이 완료되지 않았습니다. 인증 메일을 재발송했습니다. 이메일을 확인해 주세요.")
+                else:
+                     raise AuthenticationFailed("이메일 인증이 완료되지 않았습니다. 이미 발송된 인증 메일을 확인해 주세요.")
+            
+            raise e
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
