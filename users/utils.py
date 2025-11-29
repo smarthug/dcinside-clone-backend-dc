@@ -14,7 +14,7 @@ def send_kica_email(subject, recipient_list, content_html):
     # Logo URLs (assuming they are hosted at these paths or similar)
     # If not, these should be updated to valid public URLs.
     # Using the domain from settings.FRONT_BASE_URL if available, or hardcoded.
-    base_url = getattr(settings, 'FRONT_BASE_URL', 'https://kica.or.kr')
+    base_url = getattr(settings, 'FRONT_BASE_URL', 'https://kica0472.or.kr')
     logo_img_url = f"{base_url}/media/logo/logo_img.svg"
     logo_text_url = f"{base_url}/media/logo/logo_text.svg"
 
