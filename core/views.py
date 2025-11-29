@@ -39,7 +39,6 @@ class GalleryViewSet(viewsets.ModelViewSet):
             if cached_data:
                 _permission_read = cached_data.get(
                     "results")[0].get("permission_read", 0)
-                print(_permission_read)
                 if _permission_read == 100:
                     return Response(cached_data)
                 elif self.request.user.is_authenticated and _permission_read >= self.request.user.level:
