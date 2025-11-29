@@ -1,5 +1,6 @@
 
 from django.db.models import F, Sum
+from django.core.cache import cache
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
@@ -26,11 +27,42 @@ class GalleryViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        if(self.request.user.is_authenticated):
+        if self.request.user.is_authenticated:
             qs = qs.filter(permission_read__gte=self.request.user.level)
         else:
             qs = qs.filter(permission_read_gte=99)
         return qs
+
+    def list(self, request, *args, **kwargs):
+        slug = request.query_params.get('slug')
+        if slug:
+            cache_key = f'gallery_view:{slug}'
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return Response(cached_data)
+
+        response = super().list(request, *args, **kwargs)
+
+        if slug and response.status_code == 200:
+            cache.set(cache_key, response.data, 60 * 60 * 24)  # 1 day
+
+        return response
+
+    def _invalidate_cache(self, instance):
+        cache_key = f'gallery_view:{instance.slug}'
+        cache.delete(cache_key)
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        self._invalidate_cache(instance)
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        self._invalidate_cache(instance)
+
+    def perform_destroy(self, instance):
+        self._invalidate_cache(instance)
+        instance.delete()
 
 
 
@@ -51,6 +83,12 @@ class PostViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+
+        if self.request.user.is_authenticated:
+            qs = qs.filter(gallery__permission_read__gte=self.request.user.level)
+        else:
+            qs = qs.filter(gallery__permission_read__gte=100)
+
         gallery_slug = self.request.query_params.get('gallery')
         if gallery_slug:
             qs = qs.filter(gallery__slug=gallery_slug)
@@ -61,7 +99,35 @@ class PostViewSet(viewsets.ModelViewSet):
         qs = qs.filter(is_delete=False)
         return qs
 
+    def list(self, request, *args, **kwargs):
+        gallery_slug = request.query_params.get('gallery')
+        page = request.query_params.get('page', '1')
+
+        # Cache only the first page of a specific gallery
+        if gallery_slug and page == '1':
+            cache_key = f'posts:{gallery_slug}:page:1'
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return Response(cached_data)
+
+            response = super().list(request, *args, **kwargs)
+
+            if response.status_code == 200:
+                cache.set(cache_key, response.data, 60 * 60 * 24)  # 1 day
+            return response
+
+        return super().list(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        if instance.gallery:
+            cache_key = f'posts:{instance.gallery.slug}:page:1'
+            cache.delete(cache_key)
+
     def perform_destroy(self, instance):
+        if instance.gallery:
+            cache_key = f'posts:{instance.gallery.slug}:page:1'
+            cache.delete(cache_key)
         instance.is_delete = True
         instance.save(update_fields=['is_delete'])
 
@@ -95,7 +161,7 @@ class PostViewSet(viewsets.ModelViewSet):
 
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.select_related(
-        'post', 'author', 'parent').all().order_by('created_at')
+        'post','post__gallery', 'author', 'parent').all().order_by('created_at')
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
     search_fields = ['content', 'nickname']
@@ -103,6 +169,12 @@ class CommentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+
+        if self.request.user.is_authenticated:
+            qs = qs.filter(post__gallery__permission_read__gte=self.request.user.level)
+        else:
+            qs = qs.filter(post__gallery__permission_read_gte=100)
+
         post_id = self.request.query_params.get('post')
         if post_id:
             qs = qs.filter(post_id=post_id)
@@ -126,12 +198,12 @@ class CommentViewSet(viewsets.ModelViewSet):
         return Response({'recommend': comment.recommend})
 
 
-@api_view(['GET'])
-def hot_feed(request):
-    recent_since = timezone.now() - timedelta(hours=48)
-    posts = (Post.objects
-             .filter(created_at__gte=recent_since)
-             .annotate(score=F('recommend'))
-             .order_by('-score', '-created_at')[:100])
-    serializer = PostSerializer(posts, many=True, context={'request': request})
-    return Response(serializer.data)
+# @api_view(['GET'])
+# def hot_feed(request):
+#     recent_since = timezone.now() - timedelta(hours=48)
+#     posts = (Post.objects
+#              .filter(created_at__gte=recent_since)
+#              .annotate(score=F('recommend'))
+#              .order_by('-score', '-created_at')[:100])
+#     serializer = PostSerializer(posts, many=True, context={'request': request})
+#     return Response(serializer.data)

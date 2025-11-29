@@ -11,6 +11,13 @@ DATABASES = {"default": {
     "PORT": "5432",
 }}
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.getenv("REDIS_URL", "redis://redis:6379/1"),
+    }
+}
+
 STATIC_URL = '/static_b/'
 STATIC_ROOT = Path('/front/static')
 MEDIA_URL = '/media/'

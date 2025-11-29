@@ -10,7 +10,8 @@ from .serializers import FileSerializer
 
 
 class FileView(generics.GenericAPIView, mixins.ListModelMixin, mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.DestroyModelMixin):
-    queryset = File.objects.all().order_by('id')
+    queryset = File.objects.select_related(
+        'gallery', 'author').all().order_by('id')
     permission_classes = [IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
     parser_classes = [MultiPartParser]
     serializer_class = FileSerializer
@@ -20,6 +21,12 @@ class FileView(generics.GenericAPIView, mixins.ListModelMixin, mixins.CreateMode
 
     def get_queryset(self):
         qs = super().get_queryset()
+
+        if self.request.user.is_authenticated:
+            qs = qs.filter(gallery__permission_read__gte=self.request.user.level)
+        else:
+            qs = qs.filter(gallery__permission_read_gte=99)
+
         gallery_slug = self.request.data.get('gallery')
         if gallery_slug:
             qs = qs.select_related('gallery').filter(

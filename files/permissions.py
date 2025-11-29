@@ -8,7 +8,7 @@ from shared.permissions import IsLevel1User
 class IsAuthorOrReadOnly(IsLevel1User):
 
     def has_permission(self, request, view):
-        # if view.action != 'list' and request.method in SAFE_METHODS:
+        # Allow read-only methods (filtering is done in queryset)
         if request.method in SAFE_METHODS:
             return True
 
@@ -21,20 +21,17 @@ class IsAuthorOrReadOnly(IsLevel1User):
             return False
 
         _p = Gallery.objects.filter(slug=gallery_slug)[:1].only(
-            'permission_write', 'permission_read')
+            'permission_write').first()
 
         if not _p:
             return False
-
-        if request.method in SAFE_METHODS:
-            return _p.permission_read == 100 or (request.user.is_authenticated and _p.permission_read >= request.user.level)
 
         return request.user.is_authenticated and _p.permission_write >= request.user.level
 
     def has_object_permission(self, request, view, obj):
 
         if request.method in SAFE_METHODS:
-            return obj.gallery.permission_read == 100 or (request.user.is_authenticated and obj.gallery.permission_read >= request.user.level)
+            return True
 
         if not getattr(obj, 'author', None):
             return request.user.is_authenticated and request.user.level == 1

@@ -1,8 +1,11 @@
 from rest_framework import generics, viewsets, permissions
+from rest_framework.response import Response
 from django.utils import timezone
+from django.core.cache import cache
 from shared.permissions import IsLevel1User
 from .models import Ad
 from .serializers import PublicAdSerializer, AdAdminSerializer
+
 
 
 class PublishedAdListView(generics.ListAPIView):
@@ -29,6 +32,20 @@ class PublishedAdListView(generics.ListAPIView):
         # The default ordering from the model's Meta class will be applied.
         return Ad.published.filter(location=location, start_date__lte=date_now, end_date__gte=date_now, is_active=True).order_by('order', 'start_date')
 
+    def list(self, request, *args, **kwargs):
+        location = request.query_params.get('location')
+        if location:
+            cache_key = f'ads:{location}'
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return Response(cached_data)
+
+        response = super().list(request, *args, **kwargs)
+
+        if location and response.status_code == 200:
+            cache.set(cache_key, response.data, 60 * 60 * 24)  # 1 day
+
+        return response
 
 class AdAdminViewSet(viewsets.ModelViewSet):
     """
