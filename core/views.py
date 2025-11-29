@@ -24,6 +24,16 @@ class GalleryViewSet(viewsets.ModelViewSet):
     search_fields = ['slug']
 
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if(self.request.user.is_authenticated):
+            qs = qs.filter(permission_read__gte=self.request.user.level)
+        else:
+            qs = qs.filter(permission_read_gte=99)
+        return qs
+
+
+
 class PostViewSet(viewsets.ModelViewSet):
     pagination_class = PostPagination
     queryset = Post.objects.select_related(

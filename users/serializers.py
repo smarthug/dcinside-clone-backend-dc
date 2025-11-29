@@ -3,9 +3,12 @@ from django.conf import settings
 
 from rest_framework import serializers
 from django.utils.translation import gettext_lazy as _
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 
 from .models import User, UserMetaInfo, UserAgreement, UserVerification
+from .utils import send_kica_email
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -31,6 +34,13 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'email': {'required': True},
         }
+
+    def validate_password(self, value):
+        try:
+            validate_password(value, self.instance)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
+        return value
 
     def create(self, validated_data):
         password = validated_data.pop('password')
@@ -65,8 +75,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
         verification_link = f"{settings.FRONT_BASE_URL}/verify/?token={verification_obj.token}"
         
-        html_message = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+        content_html = f"""
             <h2 style="color: #333; text-align: center;">이메일 인증 안내</h2>
             <p style="color: #555; line-height: 1.6;">
                 안녕하세요, {display_name}님.<br>
@@ -76,20 +85,13 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             <div style="text-align: center; margin: 30px 0;">
                 <a href="{verification_link}" style="background-color: #007bff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">이메일 인증하기</a>
             </div>
-            <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
-                본 메일은 발신 전용입니다.<br>
-                요청하지 않으셨다면 이 메일을 무시해 주세요.
-            </p>
-        </div>
         """
 
-        send_mail('[한국건설감정사회] 회원가입 이메일 인증 안내',
-                  '',
-                  settings.DEFAULT_FROM_EMAIL,
-                  [email],
-                  fail_silently=False,
-                  html_message=html_message,
-                  )
+        send_kica_email(
+            subject='[한국건설감정사회] 회원가입 이메일 인증 안내',
+            recipient_list=[email],
+            content_html=content_html
+        )
         return user
 
 

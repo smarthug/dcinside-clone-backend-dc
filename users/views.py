@@ -2,18 +2,24 @@
 import csv
 
 from rest_framework import generics, permissions, status, response, viewsets
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils import timezone
 from django.http import HttpResponse
 from django.core.mail import send_mail
 from django.conf import settings
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 
 from shared.permissions import IsLevel1User
 
 from .models import User, UserMetaInfo, UserVerification
 from .serializers import UserProfileSerializer, UserRegistrationSerializer
+from .utils import send_kica_email
 
 
 class UserRegistrationView(generics.CreateAPIView):
@@ -66,6 +72,7 @@ class UserVerifyView(generics.CreateAPIView):
         except UserVerification.DoesNotExist:
             return response.Response({"message": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
 
+
 class UserFindIDView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -77,9 +84,8 @@ class UserFindIDView(APIView):
 
         try:
             user = User.objects.get(email=email)
-            
-            html_message = f"""
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+
+            content_html = f"""
                 <h2 style="color: #333; text-align: center;">아이디 찾기 안내</h2>
                 <p style="color: #555; line-height: 1.6;">
                     안녕하세요.<br>
@@ -89,20 +95,12 @@ class UserFindIDView(APIView):
                 <div style="text-align: center; margin: 30px 0;">
                     <a href="{settings.FRONT_BASE_URL}/auth/login" style="background-color: #007bff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">로그인 하러가기</a>
                 </div>
-                <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
-                    본 메일은 발신 전용입니다.<br>
-                    요청하지 않으셨다면 이 메일을 무시해 주세요.
-                </p>
-            </div>
             """
 
-            send_mail(
-                '[한국건설감정사회] 아이디 찾기 안내',
-                '',
-                settings.DEFAULT_FROM_EMAIL,
-                [email],
-                fail_silently=False,
-                html_message=html_message
+            send_kica_email(
+                subject='[한국건설감정사회] 아이디 찾기 안내',
+                recipient_list=[email],
+                content_html=content_html
             )
 
             return Response({"message": "아이디가 이메일로 발송되었습니다."}, status=status.HTTP_200_OK)
@@ -134,7 +132,7 @@ class UserDataCSVView(APIView):
         # If file is present, it's an import
         if 'file' in request.FILES:
             return self.handle_import(request)
-        
+
         # Otherwise, assume export (e.g. if ids are provided or just requesting export)
         return self.handle_export(request)
 
@@ -153,7 +151,7 @@ class UserDataCSVView(APIView):
         writer.writerow(header)
 
         users = User.objects.all().select_related('meta_info').order_by('id')
-        
+
         # Get ids from request body (JSON or Form)
         ids = request.data.get('ids')
         if ids:
@@ -164,19 +162,21 @@ class UserDataCSVView(APIView):
                 id_list = [int(x) for x in ids if str(x).isdigit()]
             else:
                 id_list = []
-            
+
             if id_list:
                 users = users.filter(id__in=id_list)
 
         for user in users:
             meta = getattr(user, 'meta_info', None)
-            
+
             # Helper to get specialty display
             def get_specialty_display(val):
-                if not val: return ''
+                if not val:
+                    return ''
                 choices = UserMetaInfo.Specialty.choices
                 for k, v in choices:
-                    if k == val: return v
+                    if k == val:
+                        return v
                 return ''
 
             writer.writerow([
@@ -184,27 +184,29 @@ class UserDataCSVView(APIView):
                 meta.korean_name if meta else '',
                 user.username,
                 user.display_name,
-                '', # Icon
+                '',  # Icon
                 user.date_joined.strftime('%Y-%m-%d'),
                 user.level,
-                0, # Point
+                0,  # Point
                 meta.postal_code if meta else '',
                 meta.address if meta else '',
-                '', # Resident ID
+                '',  # Resident ID
                 meta.phone_primary if meta else '',
                 meta.phone_secondary if meta else '',
-                meta.birth_date.strftime('%Y-%m-%d') if meta and meta.birth_date else '',
-                '', # Gender
-                'Yes', # Email receive
-                'Yes', # Note receive
+                meta.birth_date.strftime(
+                    '%Y-%m-%d') if meta and meta.birth_date else '',
+                '',  # Gender
+                'Yes',  # Email receive
+                'Yes',  # Note receive
                 meta.photo.url if meta and meta.photo else '',
-                '', # Admin memo
-                '', # Recommender
-                0, # Login count
+                '',  # Admin memo
+                '',  # Recommender
+                0,  # Login count
                 meta.english_name if meta else '',
                 meta.appraiser_class if meta else '',
                 get_specialty_display(meta.specialty_primary) if meta else '',
-                get_specialty_display(meta.specialty_secondary) if meta else '',
+                get_specialty_display(
+                    meta.specialty_secondary) if meta else '',
                 get_specialty_display(meta.specialty_tertiary) if meta else '',
                 meta.company_info if meta else '',
                 meta.education if meta else '',
@@ -237,7 +239,8 @@ class UserDataCSVView(APIView):
             reader = csv.DictReader(decoded_file)
 
             # Specialty Reverse Mapping
-            specialty_map = {label: value for value, label in UserMetaInfo.Specialty.choices}
+            specialty_map = {label: value for value,
+                             label in UserMetaInfo.Specialty.choices}
 
             created_count = 0
             updated_count = 0
@@ -245,7 +248,7 @@ class UserDataCSVView(APIView):
             for row in reader:
                 username = row.get('아이디')
                 email = row.get('MAIL')
-                
+
                 if not username or not email:
                     continue
 
@@ -261,7 +264,7 @@ class UserDataCSVView(APIView):
                     username=username,
                     defaults=user_data
                 )
-                
+
                 if created:
                     user.set_unusable_password()
                     user.save()
@@ -274,7 +277,8 @@ class UserDataCSVView(APIView):
                 birth_date = None
                 if birth_date_str:
                     try:
-                        birth_date = timezone.datetime.strptime(birth_date_str, '%Y-%m-%d').date()
+                        birth_date = timezone.datetime.strptime(
+                            birth_date_str, '%Y-%m-%d').date()
                     except ValueError:
                         pass
 
@@ -332,20 +336,20 @@ class UserPasswordResetRequestView(APIView):
         email = request.data.get('resetEmail')
 
         if not all([username, email]):
-             return Response({"message": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # Check if user exists with matching details
             user = User.objects.get(username=username, email=email)
 
             # Create or update verification token
-            verification, created = UserVerification.objects.update_or_create(user=user)
-            
+            verification, created = UserVerification.objects.update_or_create(
+                user=user)
+
             # Send email
             reset_link = f"{settings.FRONT_BASE_URL}/auth/reset-password?token={verification.token}"
-            
-            html_message = f"""
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+
+            content_html = f"""
                 <h2 style="color: #333; text-align: center;">비밀번호 재설정 안내</h2>
                 <p style="color: #555; line-height: 1.6;">
                     안녕하세요, {username}님.<br>
@@ -355,28 +359,20 @@ class UserPasswordResetRequestView(APIView):
                 <div style="text-align: center; margin: 30px 0;">
                     <a href="{reset_link}" style="background-color: #007bff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">비밀번호 재설정</a>
                 </div>
-                <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
-                    본 메일은 발신 전용입니다.<br>
-                    요청하지 않으셨다면 이 메일을 무시해 주세요.
-                </p>
-            </div>
             """
-            
-            send_mail(
+
+            send_kica_email(
                 subject='[한국건설감정사회] 비밀번호 재설정 안내',
-                message='', # Plain text version could be added here
-                from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[email],
-                fail_silently=False,
-                html_message=html_message
+                content_html=content_html
             )
 
             return Response({"message": "Password reset email sent."}, status=status.HTTP_200_OK)
 
         except User.DoesNotExist:
-            # For security, we might want to return 200 even if user not found, 
+            # For security, we might want to return 200 even if user not found,
             # but for this specific request "find user id and password", explicit error might be expected.
-            # Let's return a generic error or specific one depending on requirements. 
+            # Let's return a generic error or specific one depending on requirements.
             # Given the context of "Find Password", telling them it's wrong is usually helpful UX vs security trade-off.
             return Response({"message": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -399,15 +395,21 @@ class UserPasswordResetConfirmView(APIView):
 
         try:
             user_verification = UserVerification.objects.get(token=token)
-            
+
             # Check expiry (e.g., 24 hours)
             if (user_verification.created_at + timezone.timedelta(hours=24)) < timezone.now():
-                 return Response({"message": "Token expired."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Token expired."}, status=status.HTTP_400_BAD_REQUEST)
 
             user = user_verification.user
+            
+            try:
+                validate_password(password, user=user)
+            except ValidationError as e:
+                return Response({"message": e.messages}, status=status.HTTP_400_BAD_REQUEST)
+
             user.set_password(password)
             user.save()
-            
+
             # Delete verification token after use
             user_verification.delete()
 
@@ -419,31 +421,28 @@ class UserPasswordResetConfirmView(APIView):
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework.exceptions import AuthenticationFailed
-
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         try:
             return super().validate(attrs)
         except AuthenticationFailed as e:
             # Check if it's due to inactive user
-            user = User.objects.filter(username=attrs.get(self.username_field)).first()
+            user = User.objects.filter(
+                username=attrs.get(self.username_field)).first()
             if user and not user.is_active:
                 # Check verification status
-                verification, created = UserVerification.objects.get_or_create(user=user)
-                
+                verification, created = UserVerification.objects.get_or_create(
+                    user=user)
+
                 # If token expired or created new, resend email
                 if created or (verification.created_at + timezone.timedelta(minutes=24)) < timezone.now():
                     # Update token (delete old and create new to refresh timestamp/token)
                     verification.delete()
                     verification = UserVerification.objects.create(user=user)
-                    
+
                     verification_link = f"{settings.FRONT_BASE_URL}/verify/?token={verification.token}"
-                    
-                    html_message = f"""
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+
+                    content_html = f"""
                         <h2 style="color: #333; text-align: center;">이메일 인증 안내 (재발송)</h2>
                         <p style="color: #555; line-height: 1.6;">
                             안녕하세요, {user.display_name or user.username}님.<br>
@@ -453,26 +452,128 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                         <div style="text-align: center; margin: 30px 0;">
                             <a href="{verification_link}" style="background-color: #007bff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">이메일 인증하기</a>
                         </div>
-                        <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
-                            본 메일은 발신 전용입니다.<br>
-                            요청하지 않으셨다면 이 메일을 무시해 주세요.
-                        </p>
-                    </div>
                     """
-                    
-                    send_mail(
-                        '[한국건설감정사회] 이메일 인증 안내 (재발송)',
-                        '',
-                        settings.DEFAULT_FROM_EMAIL,
-                        [user.email],
-                        fail_silently=False,
-                        html_message=html_message
+
+                    send_kica_email(
+                        subject='[한국건설감정사회] 이메일 인증 안내 (재발송)',
+                        recipient_list=[user.email],
+                        content_html=content_html
                     )
-                    raise AuthenticationFailed("이메일 인증이 완료되지 않았습니다. 인증 메일을 재발송했습니다. 이메일을 확인해 주세요.")
+                    raise AuthenticationFailed(
+                        "이메일 인증이 완료되지 않았습니다. 인증 메일을 재발송했습니다. 이메일을 확인해 주세요.")
                 else:
-                     raise AuthenticationFailed("이메일 인증이 완료되지 않았습니다. 이미 발송된 인증 메일을 확인해 주세요.")
-            
+                    raise AuthenticationFailed(
+                        "이메일 인증이 완료되지 않았습니다. 이미 발송된 인증 메일을 확인해 주세요.")
+
             raise e
+
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+
+class DisputeSubmissionView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        data = request.data
+        
+        # Extract fields
+        name = data.get('name', '')
+        affiliation = data.get('affiliation', '')
+        contact = data.get('contact', '')
+        project_name = data.get('project_name', '')
+        
+        tech_major = data.get('tech_major', '')
+        tech_minor = data.get('tech_minor', '')
+        
+        dispute_field = data.get('dispute_field', '')
+        dispute_content = data.get('dispute_content', '')
+        request_content = data.get('request_content', '')
+
+        # Validate required fields (basic validation)
+        if not all([name, contact, tech_major, dispute_field, dispute_content]):
+             return Response({"message": "필수 항목을 모두 입력해 주세요."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Format email body
+        email_body = f"""
+1. 접수자 정보
+ 1) 성명 : {name}
+ 2) 소속 / 직급 : {affiliation}
+ 3) 휴대폰번호 / 이메일주소 : {contact}
+ 4) 과업명 또는 현장명 : {project_name}
+
+2. 기술 분야
+ 1) 대분류 : {tech_major}
+ 2) 세분류 : {tech_minor}
+
+3. 분쟁 분야 : {dispute_field}
+
+4. 분쟁 내용
+ {dispute_content}
+
+5. 요청사항
+ {request_content}
+"""
+
+        # Convert plain text body to HTML for the template
+        content_html = f"<pre style='font-family: inherit; white-space: pre-wrap;'>{email_body}</pre>"
+
+        subject = f"[분쟁접수 - {tech_major}] {name}님 분쟁 접수"
+        
+        try:
+            send_kica_email(
+                subject=subject,
+                recipient_list=['kica0472@naver.com'],
+                content_html=content_html
+            )
+            return Response({"message": "분쟁 접수가 완료되었습니다."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Email sending failed: {e}")
+class AdvertisementSubmissionView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        data = request.data
+        
+        # Extract fields
+        name = data.get('name', '')
+        affiliation = data.get('affiliation', '')
+        contact = data.get('contact', '')
+        
+        company_name = data.get('company_name', '')
+        industry = data.get('industry', '')
+        homepage = data.get('homepage', '')
+
+        # Validate required fields
+        if not all([name, contact, company_name]):
+             return Response({"message": "필수 항목을 모두 입력해 주세요."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Format email body
+        email_body = f"""
+1. 접수자 정보
+ 1) 성명 : {name}
+ 2) 소속 / 직급 : {affiliation}
+ 3) 휴대폰번호 / 이메일주소 : {contact}
+
+2. 기업 정보
+ 1) 기업명 : {company_name}
+ 2) 업종 / 주요 생산품 : {industry}
+ 3) 홈페이지 주소 : {homepage}
+"""
+
+        # Convert plain text body to HTML for the template
+        content_html = f"<pre style='font-family: inherit; white-space: pre-wrap;'>{email_body}</pre>"
+
+        subject = f"[광고신청] {name}님 광고 신청"
+        
+        try:
+            send_kica_email(
+                subject=subject,
+                recipient_list=['kica0472@naver.com'],
+                content_html=content_html
+            )
+            return Response({"message": "광고 신청이 완료되었습니다."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Email sending failed: {e}")
+            return Response({"message": "메일 발송 중 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

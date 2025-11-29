@@ -70,6 +70,32 @@ WSGI_APPLICATION = 'dcclone.wsgi.application'
 DATABASES = {'default': dj_database_url.parse(os.getenv(
     'DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/dcclone'), conn_max_age=600)}
 
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+    "django.contrib.auth.hashers.ScryptPasswordHasher",
+]
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {
+            "min_length": 8,
+        },
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+]
+
 AUTH_USER_MODEL = 'users.User'
 LANGUAGE_CODE = 'ko-kr'
 TIME_ZONE = 'UTC'
