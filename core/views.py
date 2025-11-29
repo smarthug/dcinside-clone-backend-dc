@@ -2,7 +2,7 @@
 from django.db.models import F, Sum
 from django.core.cache import cache
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated, SAFE_METHODS
 
@@ -11,8 +11,6 @@ from shared.permissions import IsLevel1UserOrReadOnly
 from .models import Gallery, Post, Comment, PostVote, CommentVote
 from .serializers import GallerySerializer, PostListSerializer, PostSerializer, CommentSerializer
 from .permissions import IsAuthorOrReadOnly
-from django.utils import timezone
-from datetime import timedelta
 
 
 class GalleryViewSet(viewsets.ModelViewSet):
@@ -23,7 +21,6 @@ class GalleryViewSet(viewsets.ModelViewSet):
     filterset_fields = ['slug', 'title']
     ordering_fields = ['created_at', 'title']
     search_fields = ['slug']
-
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -38,13 +35,22 @@ class GalleryViewSet(viewsets.ModelViewSet):
         if slug:
             cache_key = f'gallery_view:{slug}'
             cached_data = cache.get(cache_key)
+
             if cached_data:
-                return Response(cached_data)
+                _permission_read = cached_data.get(
+                    "results")[0].get("permission_read", 0)
+                print(_permission_read)
+                if _permission_read == 100:
+                    return Response(cached_data)
+                elif self.request.user.is_authenticated and _permission_read >= self.request.user.level:
+                    return Response(cached_data)
+                else:
+                    return Response({"detail": "갤러리 접근 권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN)
 
         response = super().list(request, *args, **kwargs)
 
-        if slug and response.status_code == 200:
-            cache.set(cache_key, response.data, 60 * 60 * 24)  # 1 day
+        if slug and response.status_code == 200 and len(response.data['results']) > 0:
+            cache.set(cache_key, response.data, 60 * 60 * 24 * 7)  # 1 week
 
         return response
 
@@ -63,7 +69,6 @@ class GalleryViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         self._invalidate_cache(instance)
         instance.delete()
-
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -85,7 +90,8 @@ class PostViewSet(viewsets.ModelViewSet):
         qs = super().get_queryset()
 
         if self.request.user.is_authenticated:
-            qs = qs.filter(gallery__permission_read__gte=self.request.user.level)
+            qs = qs.filter(
+                gallery__permission_read__gte=self.request.user.level)
         else:
             qs = qs.filter(gallery__permission_read__gte=100)
 
@@ -94,45 +100,14 @@ class PostViewSet(viewsets.ModelViewSet):
             qs = qs.filter(gallery__slug=gallery_slug)
         if not self.request.method in SAFE_METHODS:
             qs = qs.select_related('gallery')
-        
+
         # Filter out soft-deleted posts
         qs = qs.filter(is_delete=False)
         return qs
 
-    def list(self, request, *args, **kwargs):
-        gallery_slug = request.query_params.get('gallery')
-        page = request.query_params.get('page', '1')
-
-        # Cache only the first page of a specific gallery
-        if gallery_slug and page == '1':
-            cache_key = f'posts:{gallery_slug}:page:1'
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                return Response(cached_data)
-
-            response = super().list(request, *args, **kwargs)
-
-            if response.status_code == 200:
-                cache.set(cache_key, response.data, 60 * 60 * 24)  # 1 day
-            return response
-
-        return super().list(request, *args, **kwargs)
-
-    def perform_create(self, serializer):
-        instance = serializer.save()
-        if instance.gallery:
-            cache_key = f'posts:{instance.gallery.slug}:page:1'
-            cache.delete(cache_key)
-
     def perform_destroy(self, instance):
-        if instance.gallery:
-            cache_key = f'posts:{instance.gallery.slug}:page:1'
-            cache.delete(cache_key)
         instance.is_delete = True
         instance.save(update_fields=['is_delete'])
-
-    def get_object(self):
-        return super().get_object()
 
     @action(detail=True, methods=['post'])
     def view(self, request, pk=None):
@@ -161,7 +136,7 @@ class PostViewSet(viewsets.ModelViewSet):
 
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.select_related(
-        'post','post__gallery', 'author', 'parent').all().order_by('created_at')
+        'post', 'post__gallery', 'author', 'parent').all().order_by('created_at')
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
     search_fields = ['content', 'nickname']
@@ -171,7 +146,8 @@ class CommentViewSet(viewsets.ModelViewSet):
         qs = super().get_queryset()
 
         if self.request.user.is_authenticated:
-            qs = qs.filter(post__gallery__permission_read__gte=self.request.user.level)
+            qs = qs.filter(
+                post__gallery__permission_read__gte=self.request.user.level)
         else:
             qs = qs.filter(post__gallery__permission_read__gte=100)
 
