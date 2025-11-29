@@ -30,7 +30,7 @@ class GalleryViewSet(viewsets.ModelViewSet):
         if self.request.user.is_authenticated:
             qs = qs.filter(permission_read__gte=self.request.user.level)
         else:
-            qs = qs.filter(permission_read_gte=99)
+            qs = qs.filter(permission_read__gte=100)
         return qs
 
     def list(self, request, *args, **kwargs):
@@ -173,7 +173,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         if self.request.user.is_authenticated:
             qs = qs.filter(post__gallery__permission_read__gte=self.request.user.level)
         else:
-            qs = qs.filter(post__gallery__permission_read_gte=100)
+            qs = qs.filter(post__gallery__permission_read__gte=100)
 
         post_id = self.request.query_params.get('post')
         if post_id:

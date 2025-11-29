@@ -25,7 +25,7 @@ class FileView(generics.GenericAPIView, mixins.ListModelMixin, mixins.CreateMode
         if self.request.user.is_authenticated:
             qs = qs.filter(gallery__permission_read__gte=self.request.user.level)
         else:
-            qs = qs.filter(gallery__permission_read_gte=99)
+            qs = qs.filter(gallery__permission_read__gte=100)
 
         gallery_slug = self.request.data.get('gallery')
         if gallery_slug:
