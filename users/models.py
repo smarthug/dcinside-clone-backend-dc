@@ -45,6 +45,8 @@ class User(AbstractBaseUser, PermissionsMixin):
             "Unselect this instead of deleting accounts."
         ),
     )
+    is_deleted = models.BooleanField(default=False)
+    is_deleted_at = models.DateTimeField(null=True, blank=True)
     date_joined = models.DateTimeField(_("date joined"), auto_now_add=True)
 
     objects = UserManager()
@@ -87,6 +89,8 @@ class UserAgreement(models.Model):
     email_agreement_at = models.DateTimeField(auto_now_add=True)
     message_agreement = models.BooleanField(default=False)
     message_agreement_at = models.DateTimeField(auto_now_add=True)
+    privacy_policy_250923 = models.BooleanField(default=False)
+    privacy_policy_250923_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return self.user.username
@@ -99,9 +103,10 @@ class UserMetaInfo(models.Model):
         ENVIRONMENT = 3, '환경'
         ELECTRICAL = 4, '전기'
         MECHANICAL = 5, '설비'
-        STRUCTURE = 6, '건축,토목구조'
+        ARCH_STRUCTURE = 6, '건축구조'
         CULTURAL_HERITAGE = 7, '문화재'
         LAW = 8, '법률'
+        CIVIL_STRUCTURE = 9, '토목구조'
 
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='meta_info')
@@ -123,11 +128,74 @@ class UserMetaInfo(models.Model):
         choices=Specialty.choices, blank=True, null=True)
     specialty_secondary = models.PositiveSmallIntegerField(
         choices=Specialty.choices, blank=True, null=True)
-    specialty_tertiary = models.PositiveSmallIntegerField(
-        choices=Specialty.choices, blank=True, null=True)
-    company_info = models.CharField(max_length=255, blank=True, null=True)
-    education = models.CharField(max_length=255, blank=True, null=True)
-    experience = models.TextField(blank=True, null=True)
-    certificate1 = models.CharField(max_length=255, blank=True, null=True)
-    certificate2 = models.CharField(max_length=255, blank=True, null=True)
+        
+    # Affiliation Fields
+    company_info = models.CharField(max_length=255, blank=True, null=True) # Legacy
+    
+    company = models.CharField(max_length=100, blank=True, null=True)
+    department = models.CharField(max_length=50, blank=True, null=True)
+    position = models.CharField(max_length=50, blank=True, null=True)
+    company_industry = models.CharField(max_length=100, blank=True, null=True)
+    company_task = models.CharField(max_length=255, blank=True, null=True)
+    company_postal_code = models.CharField(max_length=20, blank=True, null=True)
+    company_address = models.CharField(max_length=255, blank=True, null=True)
+    company_phone = models.CharField(max_length=20, blank=True, null=True)
+    
+    activity_region = models.CharField(max_length=100, blank=True, null=True)
+    activity_region_2 = models.CharField(max_length=100, blank=True, null=True)
+    activity_region_3 = models.CharField(max_length=100, blank=True, null=True)
+    
     homepage_url = models.URLField(blank=True, null=True)
+
+
+class UserEducation(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='educations')
+    school_name = models.TextField()
+    major = models.TextField()
+    degree = models.TextField()
+    status = models.TextField()
+    grad_date = models.DateField(null=True, blank=True)
+
+
+class UserCareer(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='careers')
+    company = models.TextField()
+    position = models.TextField()
+    assigned_task = models.TextField()
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+
+
+class UserCertificate(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='certificates')
+    name = models.TextField()
+    issuer = models.TextField()
+    date = models.DateField()
+    license_no = models.TextField()
+
+
+class UserExternalActivity(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='activities')
+    content = models.TextField()
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+
+
+class UserPublication(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='publications')
+    title = models.TextField()
+    publisher = models.TextField()
+    date = models.DateField()
+
+
+class UserAward(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='awards')
+    name = models.TextField()
+    issuer = models.TextField()
+    date = models.DateField()

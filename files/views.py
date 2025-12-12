@@ -22,17 +22,16 @@ class FileView(generics.GenericAPIView, mixins.ListModelMixin, mixins.CreateMode
     def get_queryset(self):
         qs = super().get_queryset()
 
-        if self.request.user.is_authenticated:
-            qs = qs.filter(gallery__permission_read__gte=self.request.user.level)
-        else:
-            qs = qs.filter(gallery__permission_read__gte=100)
+        #  todo: set cookie
+        # if self.request.user.is_authenticated:
+        #     qs = qs.filter(gallery__permission_read__gte=self.request.user.level)
+        # else:
+        #     qs = qs.filter(gallery__permission_read__gte=100)
 
         gallery_slug = self.request.data.get('gallery')
         if gallery_slug:
-            qs = qs.select_related('gallery').filter(
+            qs = qs.filter(
                 gallery__slug=gallery_slug)
-        if not self.request.method in SAFE_METHODS:
-            qs = qs.select_related('gallery')
         return qs
 
     def get(self, request, *args, **kwargs):
@@ -45,7 +44,7 @@ class FileView(generics.GenericAPIView, mixins.ListModelMixin, mixins.CreateMode
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
-        return FileResponse(instance.file.open('rb'))
+        return FileResponse(instance.file.open('rb'), as_attachment=True, filename=instance.filename)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

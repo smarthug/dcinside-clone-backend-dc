@@ -19,7 +19,7 @@ class PostSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
         fields = ['id', 'gallery', 'title', 'content', 'author', 'author_username',
-                  'nickname', 'image', 'recommend', 'views', 'created_at', 'updated_at', 'is_notice']
+                  'nickname', 'image', 'recommend', 'views', 'created_at', 'updated_at', 'is_notice', 'external_link']
         read_only_fields = ['author', 'recommend', 'views']
 
     def get_author_username(self, obj):

@@ -17,8 +17,8 @@ from django.core.exceptions import ValidationError
 
 from shared.permissions import IsLevel1User
 
-from .models import User, UserMetaInfo, UserVerification
-from .serializers import UserProfileSerializer, UserRegistrationSerializer
+from .models import User, UserAward, UserCareer, UserCertificate, UserEducation, UserExternalActivity, UserMetaInfo, UserPublication, UserVerification
+from .serializers import UserAwardSerializer, UserCareerSerializer, UserCertificateSerializer, UserEducationSerializer, UserExternalActivitySerializer, UserProfileSerializer, UserPublicationSerializer, UserRegistrationSerializer
 from .utils import send_kica_email
 
 
@@ -29,10 +29,19 @@ class UserRegistrationView(generics.CreateAPIView):
     parser_classes = (JSONParser, FormParser, MultiPartParser)
 
 
-class UserProfileView(generics.RetrieveUpdateAPIView):
+class UserProfileView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = (JSONParser, FormParser, MultiPartParser)
+
+    def perform_destroy(self, instance):
+        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+        instance.is_active = False
+        instance.is_deleted = True
+        instance.is_deleted_at = timezone.now()
+        instance.username = f"{instance.username}_deleted_{timestamp}"
+        instance.email = f"deleted_{timestamp}_{instance.email}"
+        instance.save()
 
     def get_object(self):
         return self.request.user
@@ -150,7 +159,8 @@ class UserDataCSVView(APIView):
         ]
         writer.writerow(header)
 
-        users = User.objects.all().select_related('meta_info').order_by('id')
+        users = User.objects.all().select_related('meta_info').prefetch_related(
+            'educations', 'careers', 'certificates', 'activities', 'publications', 'awards').order_by('id')
 
         # Get ids from request body (JSON or Form)
         ids = request.data.get('ids')
@@ -178,6 +188,20 @@ class UserDataCSVView(APIView):
                     if k == val:
                         return v
                 return ''
+
+            # Format lists
+            educations_str = "\n".join(
+                [f"{e.school_name} {e.major} {e.degree} ({e.status})" for e in user.educations.all()])
+            careers_str = "\n".join(
+                [f"{c.company} {c.position} ({c.start_date}~{c.end_date or 'Now'})" for c in user.careers.all()])
+            certificates_str = "\n".join(
+                [f"{c.name} ({c.issuer}, {c.date})" for c in user.certificates.all()])
+            activities_str = "\n".join(
+                [f"{a.content} ({a.start_date}~{a.end_date or 'Now'})" for a in user.activities.all()])
+            publications_str = "\n".join(
+                [f"{p.title} ({p.publisher}, {p.date})" for p in user.publications.all()])
+            awards_str = "\n".join(
+                [f"{a.name} ({a.issuer}, {a.date})" for a in user.awards.all()])
 
             writer.writerow([
                 user.id,
@@ -207,12 +231,13 @@ class UserDataCSVView(APIView):
                 get_specialty_display(meta.specialty_primary) if meta else '',
                 get_specialty_display(
                     meta.specialty_secondary) if meta else '',
-                get_specialty_display(meta.specialty_tertiary) if meta else '',
                 meta.company_info if meta else '',
-                meta.education if meta else '',
-                meta.experience if meta else '',
-                meta.certificate1 if meta else '',
-                meta.certificate2 if meta else '',
+                educations_str,
+                careers_str,
+                certificates_str,
+                activities_str,
+                publications_str,
+                awards_str,
                 meta.homepage_url if meta else '',
                 user.email,
             ])
@@ -256,7 +281,8 @@ class UserDataCSVView(APIView):
                 user_data = {
                     'email': email,
                     'display_name': row.get('별명', ''),
-                    'level': 99,
+                    'level': 1,
+                    'is_active': True
                 }
 
                 # Create or Update User
@@ -293,12 +319,7 @@ class UserDataCSVView(APIView):
                     'appraiser_class': row.get('건설감정사 기수', ''),
                     'specialty_primary': specialty_map.get(row.get('전문분야 1순위', '')),
                     'specialty_secondary': specialty_map.get(row.get('전문분야 2순위', '')),
-                    'specialty_tertiary': specialty_map.get(row.get('전문분야 3순위', '')),
                     'company_info': row.get('직장명,부서,직급', ''),
-                    'education': row.get('최종학력(학교,전공,학위)', ''),
-                    'experience': row.get('전공,전문분야 경력', ''),
-                    'certificate1': row.get('보유자격증1(자격증명,발급기관,취득년)', ''),
-                    'certificate2': row.get('보유자격증2(자격증명,발급기관,취득년)', ''),
                     'homepage_url': row.get('HOME', ''),
                 }
 
@@ -325,7 +346,13 @@ class UsersView(viewsets.ModelViewSet):
     parser_classes = (JSONParser, FormParser, MultiPartParser)
 
     filterset_fields = ['level', 'is_active']
-    search_fields = ['username', 'email', 'display_name']
+    search_fields = ['username', 'email', 'display_name', 'meta_info__korean_name']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.action == 'list':
+            queryset = queryset.select_related('meta_info')
+        return queryset
 
 
 class UserPasswordResetRequestView(APIView):
@@ -401,7 +428,7 @@ class UserPasswordResetConfirmView(APIView):
                 return Response({"message": "Token expired."}, status=status.HTTP_400_BAD_REQUEST)
 
             user = user_verification.user
-            
+
             try:
                 validate_password(password, user=user)
             except ValidationError as e:
@@ -429,6 +456,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             # Check if it's due to inactive user
             user = User.objects.filter(
                 username=attrs.get(self.username_field)).first()
+
+            if user and user.is_deleted:
+                raise AuthenticationFailed("존재하지 않는 회원입니다.")
+
             if user and not user.is_active:
                 # Check verification status
                 verification, created = UserVerification.objects.get_or_create(
@@ -477,23 +508,23 @@ class DisputeSubmissionView(APIView):
 
     def post(self, request, *args, **kwargs):
         data = request.data
-        
+
         # Extract fields
         name = data.get('name', '')
         affiliation = data.get('affiliation', '')
         contact = data.get('contact', '')
         project_name = data.get('project_name', '')
-        
+
         tech_major = data.get('tech_major', '')
         tech_minor = data.get('tech_minor', '')
-        
+
         dispute_field = data.get('dispute_field', '')
         dispute_content = data.get('dispute_content', '')
         request_content = data.get('request_content', '')
 
         # Validate required fields (basic validation)
         if not all([name, contact, tech_major, dispute_field, dispute_content]):
-             return Response({"message": "필수 항목을 모두 입력해 주세요."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "필수 항목을 모두 입력해 주세요."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Format email body
         email_body = f"""
@@ -520,7 +551,7 @@ class DisputeSubmissionView(APIView):
         content_html = f"<pre style='font-family: inherit; white-space: pre-wrap;'>{email_body}</pre>"
 
         subject = f"[분쟁접수 - {tech_major}] {name}님 분쟁 접수"
-        
+
         try:
             send_kica_email(
                 subject=subject,
@@ -530,24 +561,26 @@ class DisputeSubmissionView(APIView):
             return Response({"message": "분쟁 접수가 완료되었습니다."}, status=status.HTTP_200_OK)
         except Exception as e:
             print(f"Email sending failed: {e}")
+
+
 class AdvertisementSubmissionView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
         data = request.data
-        
+
         # Extract fields
         name = data.get('name', '')
         affiliation = data.get('affiliation', '')
         contact = data.get('contact', '')
-        
+
         company_name = data.get('company_name', '')
         industry = data.get('industry', '')
         homepage = data.get('homepage', '')
 
         # Validate required fields
         if not all([name, contact, company_name]):
-             return Response({"message": "필수 항목을 모두 입력해 주세요."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "필수 항목을 모두 입력해 주세요."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Format email body
         email_body = f"""
@@ -566,7 +599,7 @@ class AdvertisementSubmissionView(APIView):
         content_html = f"<pre style='font-family: inherit; white-space: pre-wrap;'>{email_body}</pre>"
 
         subject = f"[광고신청] {name}님 광고 신청"
-        
+
         try:
             send_kica_email(
                 subject=subject,
@@ -577,3 +610,75 @@ class AdvertisementSubmissionView(APIView):
         except Exception as e:
             print(f"Email sending failed: {e}")
             return Response({"message": "메일 발송 중 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UserEducationViewSet(viewsets.ModelViewSet):
+    serializer_class = UserEducationSerializer
+    queryset = UserEducation.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class UserCareerViewSet(viewsets.ModelViewSet):
+    serializer_class = UserCareerSerializer
+    queryset = UserCareer.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class UserCertificateViewSet(viewsets.ModelViewSet):
+    serializer_class = UserCertificateSerializer
+    queryset = UserCertificate.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class UserExternalActivityViewSet(viewsets.ModelViewSet):
+    serializer_class = UserExternalActivitySerializer
+    queryset = UserExternalActivity.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class UserPublicationViewSet(viewsets.ModelViewSet):
+    serializer_class = UserPublicationSerializer
+    queryset = UserPublication.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class UserAwardViewSet(viewsets.ModelViewSet):
+    serializer_class = UserAwardSerializer
+    queryset = UserAward.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

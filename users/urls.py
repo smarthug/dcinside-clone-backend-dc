@@ -1,9 +1,17 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from .views import UserProfileView, UserRegistrationView, UserVerifyView, UserLevelView, UserDataCSVView, UsersView, UserPasswordResetRequestView, UserPasswordResetConfirmView, UserFindIDView, DisputeSubmissionView, AdvertisementSubmissionView
+from .views import (UserProfileView, UserRegistrationView, UserVerifyView, UserLevelView, UserDataCSVView, UsersView, 
+                    UserPasswordResetRequestView, UserPasswordResetConfirmView, UserFindIDView, DisputeSubmissionView, AdvertisementSubmissionView,
+                    UserEducationViewSet, UserCareerViewSet, UserCertificateViewSet, UserExternalActivityViewSet, UserPublicationViewSet, UserAwardViewSet)
 
 router = DefaultRouter()
+router.register(r'educations', UserEducationViewSet, basename='user-educations')
+router.register(r'careers', UserCareerViewSet, basename='user-careers')
+router.register(r'certificates', UserCertificateViewSet, basename='user-certificates')
+router.register(r'activities', UserExternalActivityViewSet, basename='user-activities')
+router.register(r'publications', UserPublicationViewSet, basename='user-publications')
+router.register(r'awards', UserAwardViewSet, basename='user-awards')
 router.register(r'', UsersView, basename='users')
 
 urlpatterns = [

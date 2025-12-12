@@ -63,3 +63,19 @@ class AdAdminViewSet(viewsets.ModelViewSet):
 
     # Admin sees all objects, not just published ones
     queryset = Ad.objects.all().order_by('location', 'order')
+
+    def _invalidate_cache(self, instance):
+        cache_key = f'ads:{instance.location}'
+        cache.delete(cache_key)
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        self._invalidate_cache(instance)
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        self._invalidate_cache(instance)
+
+    def perform_destroy(self, instance):
+        self._invalidate_cache(instance)
+        instance.delete()

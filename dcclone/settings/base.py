@@ -26,7 +26,8 @@ INSTALLED_APPS = [
     'core',
     'users',
     'ads',
-    'files'
+    'files',
+    'tasks'
 ]
 
 

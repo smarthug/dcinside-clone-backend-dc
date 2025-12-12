@@ -2,8 +2,12 @@
 from django.conf import settings
 from django.db import models
 
+from dcclone.utils.fs import get_filename, mfs
+
 User = settings.AUTH_USER_MODEL
 
+def upload_to_file(instance, filename):
+    return "public/{0}".format(get_filename(instance.file.read(), filename))
 
 class TimestampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -36,7 +40,7 @@ class Post(TimestampedModel):
     author = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name='posts')
     nickname = models.CharField(max_length=30, blank=True, null=True)
-    image = models.ImageField(upload_to='posts/', blank=True, null=True)
+    image = models.ImageField(upload_to=upload_to_file, storage=mfs, blank=True, null=True)
     external_link = models.URLField(blank=True, null=True)
     recommend = models.IntegerField(default=0)
     views = models.PositiveIntegerField(default=0)
