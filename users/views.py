@@ -131,7 +131,7 @@ class UserLevelView(generics.RetrieveAPIView):
         username = user.username
         display_name = user.display_name
         email = user.email
-        return Response({"level": level, "username": username, "display_name": display_name, "email": email}, status=status.HTTP_200_OK)
+        return Response({"level": level, "username": username, "display_name": display_name, "email": email, "id": user.id}, status=status.HTTP_200_OK)
 
 
 class UserDataCSVView(APIView):
