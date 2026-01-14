@@ -354,6 +354,15 @@ class UsersView(viewsets.ModelViewSet):
             queryset = queryset.select_related('meta_info')
         return queryset
 
+    def perform_destroy(self, instance):
+        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+        instance.is_active = False
+        instance.is_deleted = True
+        instance.is_deleted_at = timezone.now()
+        instance.username = f"{instance.username}_deleted_{timestamp}"
+        instance.email = f"deleted_{timestamp}_{instance.email}"
+        instance.save()
+
 
 class UserPasswordResetRequestView(APIView):
     permission_classes = [permissions.AllowAny]

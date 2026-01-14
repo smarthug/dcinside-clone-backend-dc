@@ -25,6 +25,7 @@ class Gallery(TimestampedModel):
     allow_images = models.BooleanField(default=True)
     permission_read = models.PositiveSmallIntegerField(default=99)
     permission_write = models.PositiveSmallIntegerField(default=1)
+    permission_admin = models.PositiveSmallIntegerField(default=1)
     permission_per_post = models.BooleanField(default=False)
     allow_comments = models.BooleanField(default=False)
 
