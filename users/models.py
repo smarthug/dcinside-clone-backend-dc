@@ -1,12 +1,14 @@
 from uuid import uuid4
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, UserManager
 from django.contrib.auth.validators import UnicodeUsernameValidator
+from dcclone.utils.fs import get_filename, mfs
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 # from django.contrib.postgres.fields import ArrayField
-
+def upload_to_file(instance, filename):
+    return "public/{0}".format(get_filename(instance.photo.read(), filename))
 
 class User(AbstractBaseUser, PermissionsMixin):
     username_validator = UnicodeUsernameValidator()
@@ -104,9 +106,10 @@ class UserMetaInfo(models.Model):
         ELECTRICAL = 4, '전기'
         MECHANICAL = 5, '설비'
         ARCH_STRUCTURE = 6, '건축구조'
+        CIVIL_STRUCTURE = 9, '토목구조'
         CULTURAL_HERITAGE = 7, '문화재'
         LAW = 8, '법률'
-        CIVIL_STRUCTURE = 9, '토목구조'
+        SAFETY = 10, '안전'
 
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='meta_info')
@@ -122,7 +125,7 @@ class UserMetaInfo(models.Model):
 
     birth_date = models.DateField(blank=True, null=True)
 
-    photo = models.ImageField(upload_to='users/photos/', blank=True, null=True)
+    photo = models.ImageField(upload_to=upload_to_file, storage=mfs, blank=True, null=True)
     appraiser_class = models.CharField(max_length=30, blank=True, null=True)
     specialty_primary = models.PositiveSmallIntegerField(
         choices=Specialty.choices, blank=True, null=True)

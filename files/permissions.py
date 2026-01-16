@@ -20,7 +20,7 @@ class IsAuthorOrReadOnly(IsLevel1User):
         if not gallery_slug:
             return False
 
-        _p = Gallery.objects.filter(slug=gallery_slug)[:1].only(
+        _p = Gallery.objects.filter(slug=gallery_slug).only(
             'permission_write').first()
 
         if not _p:
@@ -38,7 +38,7 @@ class IsAuthorOrReadOnly(IsLevel1User):
         if not gallery_slug:
             return False
 
-        _p = Gallery.objects.filter(slug=gallery_slug)[:1].only(
+        _p = Gallery.objects.filter(slug=gallery_slug).only(
             'permission_admin').first()
 
         if not _p:

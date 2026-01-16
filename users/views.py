@@ -18,7 +18,7 @@ from django.core.exceptions import ValidationError
 from shared.permissions import IsLevel1User
 
 from .models import User, UserAward, UserCareer, UserCertificate, UserEducation, UserExternalActivity, UserMetaInfo, UserPublication, UserVerification
-from .serializers import UserAwardSerializer, UserCareerSerializer, UserCertificateSerializer, UserEducationSerializer, UserExternalActivitySerializer, UserProfileSerializer, UserPublicationSerializer, UserRegistrationSerializer
+from .serializers import UserAwardSerializer, UserCareerSerializer, UserCertificateSerializer, UserEducationSerializer, UserExternalActivitySerializer, UserListSerializer, UserProfileSerializer, UserPublicationSerializer, UserRegistrationSerializer
 from .utils import send_kica_email
 
 
@@ -44,7 +44,7 @@ class UserProfileView(generics.RetrieveUpdateDestroyAPIView):
         instance.save()
 
     def get_object(self):
-        return self.request.user
+        return User.objects.filter(id=self.request.user.id).select_related('meta_info',).get()
 
     # def put(self, request, *args, **kwargs):
     #     return response.Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
@@ -126,12 +126,16 @@ class UserLevelView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        user = self.request.user
+        user = User.objects.filter(id=self.request.user.id).select_related('meta_info')[:1].only('level', 'username', 'display_name', 'email', 'meta_info__photo').get()
         level = user.level
         username = user.username
         display_name = user.display_name
         email = user.email
-        return Response({"level": level, "username": username, "display_name": display_name, "email": email, "id": user.id}, status=status.HTTP_200_OK)
+        photo = None
+        if hasattr(user, 'meta_info') and user.meta_info.photo:
+            photo = user.meta_info.photo.url
+
+        return Response({"level": level, "username": username, "display_name": display_name, "email": email, "id": user.id, "photo": photo}, status=status.HTTP_200_OK)
 
 
 class UserDataCSVView(APIView):
@@ -340,7 +344,7 @@ class UserDataCSVView(APIView):
 
 
 class UsersView(viewsets.ModelViewSet):
-    queryset = User.objects.all().order_by('-date_joined')
+    queryset = User.objects.all().filter(is_deleted=False).order_by('-date_joined')
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated, IsLevel1User]
     parser_classes = (JSONParser, FormParser, MultiPartParser)
@@ -348,11 +352,14 @@ class UsersView(viewsets.ModelViewSet):
     filterset_fields = ['level', 'is_active']
     search_fields = ['username', 'email', 'display_name', 'meta_info__korean_name']
 
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return UserListSerializer
+        return UserProfileSerializer
+
     def get_queryset(self):
         queryset = super().get_queryset()
-        if self.action == 'list':
-            queryset = queryset.select_related('meta_info')
-        return queryset
+        return queryset.select_related('meta_info')
 
     def perform_destroy(self, instance):
         timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
@@ -621,73 +628,61 @@ class AdvertisementSubmissionView(APIView):
             return Response({"message": "메일 발송 중 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class UserEducationViewSet(viewsets.ModelViewSet):
+
+class BaseUserResourceViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if getattr(user, 'level', 100) == 1:
+            if 'user_id' in self.request.query_params:
+                return self.queryset.filter(user_id=self.request.query_params['user_id'])
+        return self.queryset.filter(user=user)
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        # Allow admin to create data for specific user
+        if (getattr(user, 'level', 100) == 1) and 'user_id' in self.request.data:
+            try:
+                target_user = User.objects.get(id=self.request.data['user_id'])
+                serializer.save(user=target_user)
+                return
+            except User.DoesNotExist:
+                pass
+        serializer.save(user=user)
+
+
+class UserEducationViewSet(BaseUserResourceViewSet):
     serializer_class = UserEducationSerializer
     queryset = UserEducation.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
 
 
-class UserCareerViewSet(viewsets.ModelViewSet):
+
+class UserCareerViewSet(BaseUserResourceViewSet):
     serializer_class = UserCareerSerializer
     queryset = UserCareer.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
 
 
-class UserCertificateViewSet(viewsets.ModelViewSet):
+
+class UserCertificateViewSet(BaseUserResourceViewSet):
     serializer_class = UserCertificateSerializer
     queryset = UserCertificate.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
 
 
-class UserExternalActivityViewSet(viewsets.ModelViewSet):
+
+class UserExternalActivityViewSet(BaseUserResourceViewSet):
     serializer_class = UserExternalActivitySerializer
     queryset = UserExternalActivity.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
 
 
-class UserPublicationViewSet(viewsets.ModelViewSet):
+
+class UserPublicationViewSet(BaseUserResourceViewSet):
     serializer_class = UserPublicationSerializer
     queryset = UserPublication.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
 
 
-class UserAwardViewSet(viewsets.ModelViewSet):
+
+class UserAwardViewSet(BaseUserResourceViewSet):
     serializer_class = UserAwardSerializer
     queryset = UserAward.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)

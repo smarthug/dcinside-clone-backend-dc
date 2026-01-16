@@ -204,9 +204,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
             # agreements
             'email_opt_in', 'message_opt_in', 'privacy_policy_250923',
             # readonly timestamps
-            'date_joined', 'last_login',
+            'date_joined', 'last_login', 'is_active'
         ]
-        read_only_fields = ('id', 'username', 'date_joined', 'last_login')
+        read_only_fields = ('id', 'username', 'date_joined', 'last_login', 'is_active')
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -352,3 +352,26 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 user=instance, defaults=meta_updates)
 
         return instance
+
+
+class UserListSerializer(serializers.ModelSerializer):
+    korean_name = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'email', 'display_name', 'level', 'is_active',
+            'korean_name', 'date_joined',
+        ]
+        read_only_fields = ('id', 'username', 'date_joined', 'last_login')
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        meta = getattr(instance, 'meta_info', None)
+        if meta:
+            data.update({
+                'korean_name': meta.korean_name,
+            })
+        return data
+
