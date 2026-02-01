@@ -261,8 +261,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             raise PermissionDenied("등급은 관리자만 수정할 수 있습니다.")
             
         # Check appraiser_class update permission
-        if 'appraiser_class' in validated_data and user.level != 1:
-            raise PermissionDenied("건설감정사 기수는 관리자만 수정할 수 있습니다.")
+        # if 'appraiser_class' in validated_data and user.level != 1:
+        #     raise PermissionDenied("건설감정사 기수는 관리자만 수정할 수 있습니다.")
 
         # pull user fields
         email = validated_data.pop('email', None)
