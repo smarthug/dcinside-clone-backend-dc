@@ -10,7 +10,7 @@ from core.paginations import PostPagination
 from shared.permissions import IsLevel1UserOrReadOnly
 from .models import Gallery, Post, Comment, PostVote, CommentVote
 from .serializers import GallerySerializer, PostListSerializer, PostSerializer, CommentSerializer
-from .permissions import IsAuthorOrReadOnly
+from .permissions import IsAuthorOrReadOnly, IsCommentAuthorOrReadOnly
 
 
 class GalleryViewSet(viewsets.ModelViewSet):
@@ -137,7 +137,7 @@ class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.select_related(
         'post', 'post__gallery', 'author', 'parent').all().order_by('created_at')
     serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly, IsCommentAuthorOrReadOnly]
     search_fields = ['content', 'nickname']
     ordering_fields = ['created_at', 'updated_at', 'recommend']
 
