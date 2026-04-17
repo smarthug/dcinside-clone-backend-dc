@@ -4,9 +4,8 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView
 from core.views import GalleryViewSet, PostViewSet, CommentViewSet
-from users.views import CustomTokenObtainPairView
+from users.views import CustomTokenObtainPairView, CustomTokenRefreshView
 
 router = DefaultRouter()
 router.register(r'galleries', GalleryViewSet, basename='gallery')
@@ -23,7 +22,7 @@ urlpatterns = [
     path('api/tasks/', include('tasks.urls')),
     path('api/auth/jwt/create/',
          CustomTokenObtainPairView.as_view(), name='jwt-create'),
-    path('api/auth/jwt/refresh/', TokenRefreshView.as_view(), name='jwt-refresh'),
+    path('api/auth/jwt/refresh/', CustomTokenRefreshView.as_view(), name='jwt-refresh'),
     # path('api/hot/', hot_feed, name='hot-feed'),
 ]
 

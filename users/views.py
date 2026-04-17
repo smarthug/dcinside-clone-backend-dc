@@ -1,21 +1,27 @@
 
 import csv
+import logging
+import time
 
 from rest_framework import generics, permissions, status, response, viewsets
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.throttling import ScopedRateThrottle
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils import timezone
+from django.utils.html import escape
 from django.http import HttpResponse
-from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
+
 from shared.permissions import IsLevel1User
+
+logger = logging.getLogger(__name__)
 
 from .models import User, UserAward, UserCareer, UserCertificate, UserEducation, UserExternalActivity, UserMetaInfo, UserPublication, UserVerification
 from .serializers import UserAwardSerializer, UserCareerSerializer, UserCertificateSerializer, UserEducationSerializer, UserExternalActivitySerializer, UserListSerializer, UserProfileSerializer, UserPublicationSerializer, UserRegistrationSerializer
@@ -26,6 +32,8 @@ class UserRegistrationView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserRegistrationSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
     parser_classes = (JSONParser, FormParser, MultiPartParser)
 
 
@@ -62,6 +70,8 @@ class UserProfileView(generics.RetrieveUpdateDestroyAPIView):
 
 class UserVerifyView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     def post(self, request, *args, **kwargs):
         token = kwargs.get('token')
@@ -84,12 +94,17 @@ class UserVerifyView(generics.CreateAPIView):
 
 class UserFindIDView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     def post(self, request, *args, **kwargs):
+        start_time = time.monotonic()
         email = request.data.get('email')
 
         if not email:
             return Response({"message": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        generic_message = "해당 이메일로 가입된 계정이 있다면, 아이디 안내 메일이 발송됩니다."
 
         try:
             user = User.objects.get(email=email)
@@ -99,7 +114,7 @@ class UserFindIDView(APIView):
                 <p style="color: #555; line-height: 1.6;">
                     안녕하세요.<br>
                     요청하신 아이디 정보를 안내해 드립니다.<br>
-                    회원님의 아이디는 <strong>{user.username}</strong> 입니다.
+                    회원님의 아이디는 <strong>{escape(user.username)}</strong> 입니다.
                 </p>
                 <div style="text-align: center; margin: 30px 0;">
                     <a href="{settings.FRONT_BASE_URL}/auth/login" style="background-color: #007bff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">로그인 하러가기</a>
@@ -111,22 +126,22 @@ class UserFindIDView(APIView):
                 recipient_list=[email],
                 content_html=content_html
             )
-
-            return Response({"message": "아이디가 이메일로 발송되었습니다."}, status=status.HTTP_200_OK)
-
         except User.DoesNotExist:
-            # For security, we might want to return 200 even if user not found, but for UX we return 404 here as per typical requirement unless specified otherwise.
-            # Given the previous context, explicit error seems preferred.
-            return Response({"message": "해당 이메일로 가입된 계정을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            pass
+        except Exception:
+            pass
+
+        elapsed = time.monotonic() - start_time
+        time.sleep(max(0, 2.0 - elapsed))
+        return Response({"message": generic_message}, status=status.HTTP_200_OK)
 
 
 class UserLevelView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        user = User.objects.filter(id=self.request.user.id).select_related('meta_info')[:1].only('level', 'username', 'display_name', 'email', 'meta_info__photo').get()
+        user = User.objects.filter(id=self.request.user.id).select_related('meta_info')[
+            :1].only('level', 'username', 'display_name', 'email', 'meta_info__photo').get()
         level = user.level
         username = user.username
         display_name = user.display_name
@@ -285,7 +300,7 @@ class UserDataCSVView(APIView):
                 user_data = {
                     'email': email,
                     'display_name': row.get('별명', ''),
-                    'level': 1,
+                    'level': 99,
                     'is_active': True
                 }
 
@@ -337,10 +352,9 @@ class UserDataCSVView(APIView):
                 "message": f"Processed successfully. Created: {created_count}, Updated: {updated_count}"
             }, status=status.HTTP_200_OK)
 
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return Response({"message": f"Error processing file: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception("CSV processing error")
+            return Response({"message": "파일 처리 중 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UsersView(viewsets.ModelViewSet):
@@ -350,7 +364,8 @@ class UsersView(viewsets.ModelViewSet):
     parser_classes = (JSONParser, FormParser, MultiPartParser)
 
     filterset_fields = ['level', 'is_active']
-    search_fields = ['username', 'email', 'display_name', 'meta_info__korean_name']
+    search_fields = ['username', 'email',
+                     'display_name', 'meta_info__korean_name']
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -373,29 +388,31 @@ class UsersView(viewsets.ModelViewSet):
 
 class UserPasswordResetRequestView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     def post(self, request, *args, **kwargs):
+        start_time = time.monotonic()
         username = request.data.get('username')
         email = request.data.get('resetEmail')
 
         if not all([username, email]):
             return Response({"message": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
 
+        generic_message = "해당 계정 정보가 일치하면 비밀번호 재설정 메일이 발송됩니다."
+
         try:
-            # Check if user exists with matching details
             user = User.objects.get(username=username, email=email)
 
-            # Create or update verification token
             verification, created = UserVerification.objects.update_or_create(
                 user=user)
 
-            # Send email
             reset_link = f"{settings.FRONT_BASE_URL}/auth/reset-password?token={verification.token}"
 
             content_html = f"""
                 <h2 style="color: #333; text-align: center;">비밀번호 재설정 안내</h2>
                 <p style="color: #555; line-height: 1.6;">
-                    안녕하세요, {username}님.<br>
+                    안녕하세요, {escape(username)}님.<br>
                     비밀번호 재설정을 요청하셔서 안내 메일을 보내드립니다.<br>
                     아래 버튼을 클릭하여 비밀번호를 재설정해 주세요.
                 </p>
@@ -409,21 +426,20 @@ class UserPasswordResetRequestView(APIView):
                 recipient_list=[email],
                 content_html=content_html
             )
-
-            return Response({"message": "Password reset email sent."}, status=status.HTTP_200_OK)
-
         except User.DoesNotExist:
-            # For security, we might want to return 200 even if user not found,
-            # but for this specific request "find user id and password", explicit error might be expected.
-            # Let's return a generic error or specific one depending on requirements.
-            # Given the context of "Find Password", telling them it's wrong is usually helpful UX vs security trade-off.
-            return Response({"message": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            pass
+        except Exception:
+            pass
+
+        elapsed = time.monotonic() - start_time
+        time.sleep(max(0, 2.0 - elapsed))
+        return Response({"message": generic_message}, status=status.HTTP_200_OK)
 
 
 class UserPasswordResetConfirmView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     def post(self, request, *args, **kwargs):
         token = request.data.get('token')
@@ -460,8 +476,9 @@ class UserPasswordResetConfirmView(APIView):
 
         except UserVerification.DoesNotExist:
             return Response({"message": "Invalid token."}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception("Password reset error")
+            return Response({"message": "요청 처리 중 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -492,7 +509,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                     content_html = f"""
                         <h2 style="color: #333; text-align: center;">이메일 인증 안내 (재발송)</h2>
                         <p style="color: #555; line-height: 1.6;">
-                            안녕하세요, {user.display_name or user.username}님.<br>
+                            안녕하세요, {escape(user.display_name or user.username)}님.<br>
                             이메일 인증이 완료되지 않아 로그인할 수 없습니다.<br>
                             아래 버튼을 클릭하여 이메일 인증을 완료해 주세요.
                         </p>
@@ -515,8 +532,37 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             raise e
 
 
+def _set_access_cookie(response):
+    """Set the access token as an HttpOnly cookie for all API routes."""
+    token = response.data.get('access')
+    if token:
+        response.set_cookie(
+            'access_token',
+            token,
+            httponly=True,
+            secure=not settings.DEBUG,
+            samesite='Strict',
+            path='/api/',
+        )
+    return response
+
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            _set_access_cookie(response)
+        return response
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            _set_access_cookie(response)
+        return response
 
 
 class DisputeSubmissionView(APIView):
@@ -564,9 +610,9 @@ class DisputeSubmissionView(APIView):
 """
 
         # Convert plain text body to HTML for the template
-        content_html = f"<pre style='font-family: inherit; white-space: pre-wrap;'>{email_body}</pre>"
+        content_html = f"<pre style='font-family: inherit; white-space: pre-wrap;'>{escape(email_body)}</pre>"
 
-        subject = f"[분쟁접수 - {tech_major}] {name}님 분쟁 접수"
+        subject = f"[분쟁접수 - {escape(tech_major)}] {escape(name)}님 분쟁 접수"
 
         try:
             send_kica_email(
@@ -575,8 +621,9 @@ class DisputeSubmissionView(APIView):
                 content_html=content_html
             )
             return Response({"message": "분쟁 접수가 완료되었습니다."}, status=status.HTTP_200_OK)
-        except Exception as e:
-            print(f"Email sending failed: {e}")
+        except Exception:
+            logger.error("Email sending failed", exc_info=True)
+            return Response({"message": "메일 발송 중 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class AdvertisementSubmissionView(APIView):
@@ -612,9 +659,9 @@ class AdvertisementSubmissionView(APIView):
 """
 
         # Convert plain text body to HTML for the template
-        content_html = f"<pre style='font-family: inherit; white-space: pre-wrap;'>{email_body}</pre>"
+        content_html = f"<pre style='font-family: inherit; white-space: pre-wrap;'>{escape(email_body)}</pre>"
 
-        subject = f"[광고신청] {name}님 광고 신청"
+        subject = f"[광고신청] {escape(name)}님 광고 신청"
 
         try:
             send_kica_email(
@@ -623,10 +670,9 @@ class AdvertisementSubmissionView(APIView):
                 content_html=content_html
             )
             return Response({"message": "광고 신청이 완료되었습니다."}, status=status.HTTP_200_OK)
-        except Exception as e:
-            print(f"Email sending failed: {e}")
+        except Exception:
+            logger.error("Email sending failed", exc_info=True)
             return Response({"message": "메일 발송 중 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 
 class BaseUserResourceViewSet(viewsets.ModelViewSet):
@@ -657,11 +703,9 @@ class UserEducationViewSet(BaseUserResourceViewSet):
     queryset = UserEducation.objects.all()
 
 
-
 class UserCareerViewSet(BaseUserResourceViewSet):
     serializer_class = UserCareerSerializer
     queryset = UserCareer.objects.all()
-
 
 
 class UserCertificateViewSet(BaseUserResourceViewSet):
@@ -669,11 +713,9 @@ class UserCertificateViewSet(BaseUserResourceViewSet):
     queryset = UserCertificate.objects.all()
 
 
-
 class UserExternalActivityViewSet(BaseUserResourceViewSet):
     serializer_class = UserExternalActivitySerializer
     queryset = UserExternalActivity.objects.all()
-
 
 
 class UserPublicationViewSet(BaseUserResourceViewSet):
@@ -681,8 +723,6 @@ class UserPublicationViewSet(BaseUserResourceViewSet):
     queryset = UserPublication.objects.all()
 
 
-
 class UserAwardViewSet(BaseUserResourceViewSet):
     serializer_class = UserAwardSerializer
     queryset = UserAward.objects.all()
-

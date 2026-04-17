@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-SECRET_KEY = os.getenv('SECRET_KEY', '7c35lx3HZW7Qsah2qaZx13eyXp85Fzhx')
+SECRET_KEY = os.getenv('SECRET_KEY')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = [h.strip() for h in os.getenv(
     'ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if h.strip()]
@@ -109,10 +109,19 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),
+    'DEFAULT_AUTHENTICATION_CLASSES': ('shared.authentication.CookieJWTAuthentication',),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend', 'rest_framework.filters.SearchFilter', 'rest_framework.filters.OrderingFilter'],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '30/minute',
+        'user': '120/minute',
+        'auth': '5/minute',
+    },
 }
 
 SIMPLE_JWT = {
@@ -129,7 +138,7 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'rokkica0472@gmail.com'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'rokkica0472@gmail.com')
 EMAIL_HOST_PASSWORD = os.getenv('GOOGLE_APP_PASS', '')  # 단, 공백을 제외한 16글자.
 
 FRONT_BASE_URL = os.getenv('FRONT_BASE_URL', 'http://localhost:3000')

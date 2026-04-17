@@ -1,6 +1,6 @@
 from django.http import FileResponse
 from rest_framework import generics, mixins, status
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, SAFE_METHODS
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
@@ -22,13 +22,13 @@ class FileView(generics.GenericAPIView, mixins.ListModelMixin, mixins.CreateMode
     def get_queryset(self):
         qs = super().get_queryset()
 
-        #  todo: set cookie
-        # if self.request.user.is_authenticated:
-        #     qs = qs.filter(gallery__permission_read__gte=self.request.user.level)
-        # else:
-        #     qs = qs.filter(gallery__permission_read__gte=100)
+        if self.request.user.is_authenticated:
+            qs = qs.filter(gallery__permission_read__gte=self.request.user.level)
+        else:
+            qs = qs.filter(gallery__permission_read__gte=100)
 
-        gallery_slug = self.request.data.get('gallery')
+        gallery_slug = self.request.query_params.get(
+            'gallery', self.request.data.get('gallery'))
         if gallery_slug:
             qs = qs.filter(
                 gallery__slug=gallery_slug)
@@ -54,7 +54,3 @@ class FileView(generics.GenericAPIView, mixins.ListModelMixin, mixins.CreateMode
         # Return a response with the file URL
         pk = str(serializer.data.get('id'))
         return Response({'url': f'/api/files/{pk}/', 'filename': serializer.data.get('filename')}, status=status.HTTP_201_CREATED, headers=headers)
-
-    # @action(detail=True, methods=['post'])
-    # def list(self, request, *args, **kwargs):
-    #     return super().list(request, *args, **kwargs)

@@ -9,33 +9,77 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    networks:
+      - db_net
   s3:
     image: rustfs/rustfs:latest
     ports:
       - "9000:9000"
       - "9001:9001"
     environment:
-      RUSTFS_ADDRESS: :9000 
-      RUSTFS_SERVER_DOMAINS: example.com 
-      RUSTFS_ACCESS_KEY: rustfsadmin 
-      RUSTFS_SECRET_KEY: rustfsadmin 
-      RUSTFS_CONSOLE_ENABLE: true 
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_SERVER_DOMAINS: example.com
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+      RUSTFS_CONSOLE_ENABLE: true
     volumes:
       - s3_storage:/data
-  web:
-    build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    networks:
+      - db_net
+  redis:
+    image: redis:alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    hostname: redis
+    networks:
+      - db_net
     ports:
-      - "8000:8000"
-    env_file:
-      - .env
+      - "6379:6379"
     volumes:
-      - .:/app
-      - media:/app/media
-    depends_on:
-      - db
+      - redisfs:/data
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - db_net
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=test@example.com
+      - PGADMIN_DEFAULT_PASSWORD=test1234
+    networks:
+      - db_net
+    volumes:
+      - ./.save_data.backup:/csvs
+  # web:
+  #   build: .
+  #   command: python manage.py runserver 0.0.0.0:8000
+  #   ports:
+  #     - "8000:8000"
+  #   env_file:
+  #     - .env
+  #   volumes:
+  #     - .:/app
+  #     - media:/app/media
+  #   networks:
+  #     - db_net
+  #   depends_on:
+  #     - db
 
 volumes:
   pgdata:
   media:
   s3_storage:
+  redisfs:
+networks:
+  db_net:

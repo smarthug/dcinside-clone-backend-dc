@@ -24,13 +24,10 @@ class PublishedAdListView(generics.ListAPIView):
     def get_queryset(self):
         """
         Filter by location, defaulting to 'hero' if not specified.
+        Ad.published manager already filters is_active, start_date, end_date.
         """
-        # Get location from query param, default to 'hero'
         location = self.request.query_params.get('location', 'hero')
-        date_now = timezone.now()
-        # Use the 'published' manager and filter by location
-        # The default ordering from the model's Meta class will be applied.
-        return Ad.published.filter(location=location, start_date__lte=date_now, end_date__gte=date_now, is_active=True).order_by('order', 'start_date')
+        return Ad.published.filter(location=location).order_by('order', 'start_date')
 
     def list(self, request, *args, **kwargs):
         location = request.query_params.get('location')

@@ -1,6 +1,7 @@
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
+from django.utils.html import escape
 
 from rest_framework import serializers
 from django.utils.translation import gettext_lazy as _
@@ -80,7 +81,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         content_html = f"""
             <h2 style="color: #333; text-align: center;">이메일 인증 안내</h2>
             <p style="color: #555; line-height: 1.6;">
-                안녕하세요, {display_name}님.<br>
+                안녕하세요, {escape(display_name)}님.<br>
                 한국건설감정사회 회원가입을 환영합니다.<br>
                 아래 버튼을 클릭하여 이메일 인증을 완료해 주세요.
             </p>
@@ -268,15 +269,41 @@ class UserProfileSerializer(serializers.ModelSerializer):
         email = validated_data.pop('email', None)
         display_name = validated_data.pop('display_name', None)
         level = validated_data.pop('level', None)
-        
+
+        email_changed = email is not None and email != instance.email
         if email is not None:
             instance.email = email
         if display_name is not None:
             instance.display_name = display_name
         if level is not None:
             instance.level = level
-            
-        instance.save(update_fields=['email', 'display_name', 'level'])
+
+        if email_changed:
+            instance.is_active = False
+
+        instance.save(update_fields=['email', 'display_name', 'level', 'is_active'])
+
+        # If email changed, require re-verification
+        if email_changed:
+            UserVerification.objects.filter(user=instance).delete()
+            verification = UserVerification.objects.create(user=instance)
+            verification_link = f"{settings.FRONT_BASE_URL}/verify/?token={verification.token}"
+            content_html = f"""
+                <h2 style="color: #333; text-align: center;">이메일 변경 인증 안내</h2>
+                <p style="color: #555; line-height: 1.6;">
+                    안녕하세요, {escape(instance.display_name or instance.username)}님.<br>
+                    이메일 주소가 변경되어 재인증이 필요합니다.<br>
+                    아래 버튼을 클릭하여 이메일 인증을 완료해 주세요.
+                </p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{verification_link}" style="background-color: #007bff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">이메일 인증하기</a>
+                </div>
+            """
+            send_kica_email(
+                subject='[한국건설감정사회] 이메일 변경 인증 안내',
+                recipient_list=[email],
+                content_html=content_html
+            )
 
         # agreements
         email_opt_in = validated_data.pop('email_opt_in', None)

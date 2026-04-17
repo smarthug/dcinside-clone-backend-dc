@@ -1,7 +1,7 @@
 
 from rest_framework.permissions import SAFE_METHODS
 
-from core.models import Gallery, Comment, Post
+from core.models import Gallery, Post
 from shared.permissions import IsLevel1User
 
 
@@ -36,22 +36,17 @@ class IsAuthorOrReadOnly(IsLevel1User):
         if not request.user.is_authenticated:
             return False
 
-        if request.user.level == 1 or (getattr(obj, 'author', None) is not None and obj.author == request.user):
+        if request.user.level == 1 or request.user.is_superuser:
             return True
 
-        gallery_slug = request.query_params.get(
-            'gallery', request.data.get('gallery'))
+        if getattr(obj, 'author', None) is not None and obj.author == request.user:
+            return True
 
-        if not gallery_slug:
+        gallery = getattr(obj, 'gallery', None)
+        if not gallery:
             return False
 
-        _p = Post.objects.select_related('gallery').filter(id=obj.id, gallery__slug=gallery_slug).only(
-            'gallery__permission_admin').first()
-
-        if not _p:
-            return False
-
-        return _p.gallery.permission_admin >= request.user.level
+        return gallery.permission_admin >= request.user.level
 
 
 class IsCommentAuthorOrReadOnly(IsLevel1User):
@@ -81,18 +76,18 @@ class IsCommentAuthorOrReadOnly(IsLevel1User):
         if request.method in SAFE_METHODS:
             return True
 
-        if request.user.level == 1 or (getattr(obj, 'author', None) is not None and obj.author == request.user):
+        if not request.user.is_authenticated:
+            return False
+
+        if request.user.level == 1 or request.user.is_superuser:
             return True
 
-        post_id = request.query_params.get('post', request.data.get('post'))
+        if getattr(obj, 'author', None) is not None and obj.author == request.user:
+            return True
 
-        if not post_id:
+        post = getattr(obj, 'post', None)
+        gallery = getattr(post, 'gallery', None) if post else None
+        if not gallery:
             return False
 
-        _p = Comment.objects.select_related('post', 'post__gallery').filter(id=obj.id, post_id=post_id).only(
-            'post__gallery__permission_read').first()
-
-        if not _p:
-            return False
-
-        return _p.post.gallery.permission_admin >= request.user.level
+        return gallery.permission_admin >= request.user.level

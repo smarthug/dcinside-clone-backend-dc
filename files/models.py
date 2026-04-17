@@ -20,7 +20,7 @@ class File(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
 
-    class META:
+    class Meta:
         unique_together = ('gallery', 'author', 'file')
 
     # Create your models here.
